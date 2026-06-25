@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rent Comp Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <style>
+    :root {
+      --navy: #1b2a4a;
+      --navy-light: #2d4373;
+      --steel: #4a6fa5;
+      --sky-pale: #eef4fa;
+      --gold: #c9a84c;
+      --green: #2e7d4f;
+      --green-light: #d4edda;
+      --red: #b94a48;
+      --red-light: #f8d7da;
+      --warm-gray: #f7f6f4;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --text-mid: #4a4a5a;
+      --text-light: #8a8a9a;
+      --border: #e2e0dc;
+      --border-light: #eeedeb;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+      --serif: 'Libre Baskerville', 'Times New Roman', Georgia, serif;
+      --sans: Calibri, 'Segoe UI', -apple-system, sans-serif;
+      --radius: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--sans); background: var(--warm-gray); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+    header { background: var(--navy); color: white; padding: 0.9rem 2rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 50; }
+    .logo { display: flex; align-items: center; gap: 0.75rem; }
+    .logo svg { opacity: 0.9; }
+    header h1 { font-family: var(--serif); font-size: 1.2rem; font-weight: 700; }
+    header .subtitle { font-family: var(--sans); font-size: 0.75rem; opacity: 0.55; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; }
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    .container { max-width: 1480px; margin: 0 auto; padding: 1.25rem 1.5rem; }
+
+    .tabs { display: flex; gap: 0; background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; border: 1px solid var(--border-light); }
+    .tab { flex: 1; padding: 0.75rem 1.25rem; text-align: center; font-family: var(--sans); font-weight: 600; font-size: 0.82rem; cursor: pointer; border-bottom: 2.5px solid transparent; transition: all 0.2s; color: var(--text-light); display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tab:hover { background: var(--warm-gray); color: var(--text-mid); }
+    .tab.active { border-bottom-color: var(--steel); color: var(--navy); background: var(--sky-pale); }
+    .tab svg { width: 16px; height: 16px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .card { background: var(--card); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); }
+    .card-title { font-family: var(--serif); font-size: 0.95rem; font-weight: 700; margin-bottom: 1rem; color: var(--navy); display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-light); }
+    .card-title svg { width: 18px; height: 18px; color: var(--steel); flex-shrink: 0; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    @media (max-width: 1100px) { .grid-2 { grid-template-columns: 1fr; } .grid-4 { grid-template-columns: 1fr 1fr; } }
+
+    .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 2.25rem 2rem; text-align: center; background: var(--warm-gray); transition: all 0.2s; cursor: pointer; position: relative; }
+    .drop-zone.dragover { border-color: var(--steel); background: var(--sky-pale); }
+    .drop-zone h2 { font-family: var(--serif); font-size: 1rem; margin-bottom: 0.3rem; color: var(--navy); font-weight: 700; }
+    .drop-zone p { color: var(--text-light); font-size: 0.82rem; }
+    .drop-zone svg { margin-bottom: 0.5rem; color: var(--steel); }
+    .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+    .stat-card { background: var(--card); border-radius: var(--radius); padding: 1rem 1.15rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); border-left: 4px solid var(--steel); }
+    .stat-card .stat-label { font-family: var(--sans); font-size: 0.68rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+    .stat-card .stat-value { font-family: var(--serif); font-size: 1.4rem; font-weight: 700; color: var(--navy); margin-top: 0.2rem; }
+    .stat-card .stat-sub { font-size: 0.72rem; color: var(--text-light); margin-top: 0.1rem; }
+    .stat-card.positive { border-left-color: var(--green); }
+    .stat-card.negative { border-left-color: var(--red); }
+    .stat-card.neutral { border-left-color: var(--gold); }
+
+    .property-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.65rem; margin-top: 0.65rem; }
+    .property-card { background: var(--card); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 0.85rem 1rem; }
+    .property-card .name { font-family: var(--serif); font-weight: 700; font-size: 0.85rem; margin-bottom: 0.15rem; color: var(--navy); }
+    .property-card .address { font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.1rem; }
+    .property-card .meta { font-size: 0.75rem; color: var(--text-mid); margin-bottom: 0.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .property-card .meta-item { display: flex; align-items: center; gap: 0.25rem; }
+    .property-card .meta-item svg { width: 12px; height: 12px; color: var(--text-light); }
+    .property-card .actions { display: flex; gap: 0.35rem; }
+
+    .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 5px; font-family: var(--sans); font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.3rem; }
+    .btn-remove { background: transparent; color: var(--red); border: 1px solid var(--red); }
+    .btn-remove:hover { background: var(--red-light); }
+    .btn-export { background: var(--navy); color: white; padding: 0.45rem 1rem; }
+    .btn-export:hover { background: var(--navy-light); }
+    .btn-export:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; }
+    .btn-export svg { width: 14px; height: 14px; }
+    .btn-primary { background: var(--steel); color: white; }
+    .btn-primary:hover { background: var(--navy-light); }
+    .btn-secondary { background: transparent; color: var(--text-mid); border: 1px solid var(--border); }
+    .btn-clear { background: transparent; color: var(--red); border: 1px solid var(--red); }
+    .btn-clear:hover { background: var(--red-light); }
+
+    .subject-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+    .subject-form .full-width { grid-column: 1 / -1; }
+    .form-group label { display: block; font-family: var(--sans); font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem; color: var(--text-mid); text-transform: uppercase; letter-spacing: 0.03em; }
+    .form-group input { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 5px; font-family: var(--sans); font-size: 0.85rem; background: white; }
+    .form-group input:focus { outline: none; border-color: var(--steel); box-shadow: 0 0 0 2px rgba(74,111,165,0.1); }
+
+    .unit-mix-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.4rem; }
+    .unit-mix-table th { background: var(--navy); color: white; padding: 0.45rem 0.5rem; text-align: left; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .unit-mix-table td { padding: 0.3rem 0.35rem; border-bottom: 1px solid var(--border-light); }
+    .unit-mix-table input { width: 100%; padding: 0.3rem 0.4rem; border: 1px solid var(--border); border-radius: 4px; font-family: var(--sans); font-size: 0.8rem; }
+    .unit-mix-table .calc-cell { background: var(--warm-gray); font-weight: 600; text-align: center; color: var(--navy); font-size: 0.8rem; }
+
+    .table-wrapper { overflow-x: auto; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border-light); }
+    table.comp-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    table.comp-table thead th { background: var(--navy); color: white; padding: 0.55rem 0.7rem; text-align: left; font-weight: 600; white-space: nowrap; position: sticky; top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.02em; }
+    table.comp-table thead th.subject-col { background: var(--steel); }
+    table.comp-table tbody td { padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+    table.comp-table tbody tr:hover { background: var(--warm-gray); }
+    table.comp-table tbody td.subject-col { background: var(--sky-pale); font-weight: 600; }
+    table.comp-table tbody td.prop-name { font-weight: 600; font-family: var(--serif); font-size: 0.78rem; background: var(--warm-gray); }
+    table.comp-table tbody tr.totals-row { background: var(--sky-pale); font-weight: 700; }
+    table.comp-table tbody tr.totals-row td { border-top: 2px solid var(--navy); font-weight: 700; }
+    .diff-positive { color: var(--green); font-weight: 600; }
+    .diff-negative { color: var(--red); font-weight: 600; }
+
+    .chart-container { position: relative; height: 300px; }
+    .chart-container-lg { position: relative; height: 380px; }
+
+    .notification { position: fixed; top: 1rem; right: 1rem; padding: 0.7rem 1.15rem; border-radius: 6px; color: white; font-family: var(--sans); font-size: 0.82rem; font-weight: 600; z-index: 200; transform: translateX(120%); transition: transform 0.3s; display: flex; align-items: center; gap: 0.5rem; }
+    .notification.show { transform: translateX(0); }
+    .notification.success { background: var(--green); }
+    .notification.error { background: var(--red); }
+
+    .section-gap { margin-top: 1.25rem; }
+    .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-light); }
+    .empty-state svg { margin-bottom: 0.75rem; color: var(--border); }
+    .badge { display: inline-block; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge-subject { background: var(--steel); color: white; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .section-label { font-family: var(--serif); font-size: 1rem; font-weight: 700; color: var(--navy); }
+    .help-note { font-size: 0.78rem; color: var(--text-light); line-height: 1.5; }
+
+    .unit-type-section { margin-bottom: 1.5rem; }
+    .unit-type-section-title { font-family: var(--serif); font-size: 0.92rem; font-weight: 700; color: var(--navy); margin-bottom: 0.5rem; padding-left: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .unit-type-section-title svg { width: 16px; height: 16px; color: var(--steel); }
+
+    .saved-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.85rem; margin-top: 0.85rem; }
+    .saved-card { background: var(--card); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 1rem 1.15rem; cursor: pointer; transition: all 0.15s; }
+    .saved-card:hover { border-color: var(--steel); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .saved-card .saved-name { font-family: var(--serif); font-weight: 700; font-size: 0.9rem; color: var(--navy); margin-bottom: 0.25rem; }
+    .saved-card .saved-date { font-size: 0.72rem; color: var(--text-light); margin-bottom: 0.45rem; }
+    .saved-card .saved-meta { font-size: 0.78rem; color: var(--text-mid); line-height: 1.5; }
+    .saved-card .saved-actions { display: flex; gap: 0.35rem; margin-top: 0.6rem; }
+    .save-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .save-form input { padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 5px; font-family: var(--sans); font-size: 0.85rem; flex: 1; min-width: 200px; }
+    .save-form input:focus { outline: none; border-color: var(--steel); box-shadow: 0 0 0 2px rgba(74,111,165,0.1); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="32" height="36" viewBox="0 0 36 40" fill="none">
+      <polygon points="0,0 36,0 20,20" fill="#48C4E4"/>
+      <polygon points="0,0 20,20 36,40 0,40" fill="#1E90B5"/>
+    </svg>
+    <div>
+      <h1>Banner Real Estate Group</h1>
+      <span class="subtitle">Multifamily Development Rent Analysis</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-export" id="exportBtn" disabled onclick="exportToExcel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export to Excel
+    </button>
+    <button class="btn btn-clear" id="clearBtn" style="display:none" onclick="clearAll()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Clear
+    </button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('setup')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Setup
+    </div>
+    <div class="tab" onclick="switchTab('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Dashboard
+    </div>
+    <div class="tab" onclick="switchTab('tables')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      Tables
+    </div>
+    <div class="tab" onclick="switchTab('saved')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Saved
+    </div>
+  </div>
+
+  <!-- SETUP TAB -->
+  <div class="tab-content active" id="tab-setup">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload Yardi Files
+          </div>
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" multiple>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="6" x2="12" y2="6"/></svg>
+            <h2>Drop Yardi Property Detail files here</h2>
+            <p>or click to browse &mdash; Rental Rate History exports (.xlsx)</p>
+          </div>
+          <div id="propertiesSection" style="display:none; margin-top:1rem;">
+            <div class="flex-between">
+              <span style="font-family:var(--serif); font-size:0.85rem; font-weight:700; color:var(--navy);">Loaded Comps</span>
+              <span class="help-note" id="propCount"></span>
+            </div>
+            <div class="property-cards" id="propertyCards"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Subject Property
+          </div>
+          <p class="help-note" style="margin-bottom:0.85rem;">Enter the property you are underwriting to compare against the Yardi comps.</p>
+          <div class="subject-form">
+            <div class="form-group full-width">
+              <label>Property Name</label>
+              <input type="text" id="subjectName" placeholder="e.g. The Grand at Riverside">
+            </div>
+            <div class="form-group">
+              <label>Total Units</label>
+              <input type="number" id="subjectTotalUnits" placeholder="Auto-calculated" readonly tabindex="-1" style="background:var(--warm-gray); color:var(--text-mid);">
+            </div>
+            <div class="form-group">
+              <label>Year Built</label>
+              <input type="number" id="subjectYearBuilt" placeholder="e.g. 2024">
+            </div>
+          </div>
+          <div style="margin-top:1.15rem;">
+            <div class="flex-between">
+              <label style="font-family:var(--serif); font-size:0.85rem; font-weight:700; color:var(--navy);">Unit Mix</label>
+              <button class="btn btn-primary" onclick="addSubjectRow()" style="font-size:0.75rem; padding:0.3rem 0.65rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Row
+              </button>
+            </div>
+            <table class="unit-mix-table" id="subjectMixTable">
+              <thead><tr>
+                <th style="width:22%">Unit Type</th><th style="width:13%">Units</th><th style="width:13%">Avg SF</th>
+                <th style="width:16%">Rent/Unit</th><th style="width:12%">$/SF</th><th style="width:10%">Mix %</th><th style="width:6%"></th>
+              </tr></thead>
+              <tbody id="subjectMixBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:1rem; text-align:right;">
+            <button class="btn btn-primary" onclick="applySubject()" style="padding:0.5rem 1.25rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Apply &amp; Compare
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div class="tab-content" id="tab-dashboard">
+    <div id="dashboardEmpty" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <p>Upload Yardi files and enter a subject property, then click "Apply & Compare."</p>
+    </div>
+    <div id="dashboardContent" style="display:none;">
+      <div class="grid-4" id="summaryStats"></div>
+      <div class="grid-2 section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Market Rent by Bedroom Type</div><div class="chart-container"><canvas id="chartRentByType"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Rent per SF by Bedroom Type</div><div class="chart-container"><canvas id="chartRentPerSF"></canvas></div></div>
+      </div>
+      <div class="grid-2 section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Unit Count by Property</div><div class="chart-container"><canvas id="chartUnitCount"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Avg SF by Bedroom Type</div><div class="chart-container"><canvas id="chartSqftComp"></canvas></div></div>
+      </div>
+      <div class="grid-2 section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Rent Premium / Discount vs Subject</div><div class="chart-container"><canvas id="chartRentDiff"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>Unit Mix Distribution</div><div class="chart-container"><canvas id="chartUnitMix"></canvas></div></div>
+      </div>
+      <div class="section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Weighted Avg Rent vs SF</div><div class="chart-container-lg"><canvas id="chartScatter"></canvas></div></div>
+      </div>
+      <div class="section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>12-Month Rent Trend (Weighted Avg)</div><div class="chart-container-lg"><canvas id="chartTrend"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLES TAB -->
+  <div class="tab-content" id="tab-tables">
+    <div id="tablesEmpty" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      <p>Upload Yardi files and enter a subject property to see comparison tables.</p>
+    </div>
+    <div id="tablesContent" style="display:none;">
+      <div class="flex-between" style="margin-bottom:0.85rem;">
+        <span class="section-label">Property Summary</span>
+        <button class="btn btn-export" onclick="exportToExcel()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export to Excel
+        </button>
+      </div>
+      <div class="table-wrapper"><table class="comp-table" id="summaryTable"><thead id="summaryHead"></thead><tbody id="summaryBody"></tbody></table></div>
+
+      <div id="unitTypeTables" style="margin-top:1.5rem;"></div>
+    </div>
+  </div>
+
+  <!-- SAVED TAB -->
+  <div class="tab-content" id="tab-saved">
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save Current Comparison
+      </div>
+      <div id="saveFormArea">
+        <div class="save-form">
+          <input type="text" id="saveCompName" placeholder="Enter a name for this comparison...">
+          <button class="btn btn-primary" onclick="saveComparison()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+            Save
+          </button>
+        </div>
+        <p class="help-note" style="margin-top:0.4rem;">Save the current subject property and loaded comps so you can revisit this comparison later.</p>
+      </div>
+    </div>
+    <div class="flex-between" style="margin-bottom:0.5rem;">
+      <span class="section-label">Saved Comparisons</span>
+      <span class="help-note" id="savedCount"></span>
+    </div>
+    <div id="savedEmpty" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <p>No saved comparisons yet. Load comps and a subject, then save from here.</p>
+    </div>
+    <div class="saved-list" id="savedList"></div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+// ── Muted color palette ──
+const SUBJECT_COLOR = '#5a7da8';
+const COMP_COLORS = ['#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a9a96','#a8856a','#9a7a7a','#7a9a7a','#b89a6a','#8a8a8a'];
+const UNIT_TYPE_COLORS = ['#5a7da8','#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a9a96','#a8856a','#9a7a7a'];
+
+let properties = [];
+let subjectProperty = null;
+let charts = {};
+
+// ── Unit Type Normalization ──
+function normalizeUnitType(raw) {
+  const s = raw.trim();
+  const low = s.toLowerCase();
+
+  if (low === 'studio' || low === 'efficiency') return 'Studio';
+  if (low.includes('studio')) return 'Studio';
+
+  // Check for alcove — keep separate
+  if (low.includes('alcove')) {
+    if (low.includes('one') || low.includes('1')) return '1 BR Alcove';
+    if (low.includes('two') || low.includes('2')) return '2 BR Alcove';
+    return s;
+  }
+
+  // Bedroom matching — extract count, ignore bath descriptions
+  const wordMap = { 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5 };
+  let brCount = null;
+
+  // Check for word-form bedrooms: "One Bedroom", "Two Bedroom", etc.
+  const wordMatch = low.match(/\b(one|two|three|four|five)\s*(bed|br)/);
+  if (wordMatch) brCount = wordMap[wordMatch[1]];
+
+  // Check for digit-form: "1 BR", "2 Bed", "1BR", "2-bed"
+  if (brCount === null) {
+    const digitMatch = low.match(/\b(\d)\s*[-]?\s*(bed|br)/);
+    if (digitMatch) brCount = parseInt(digitMatch[1]);
+  }
+
+  // Also match just "One Bedroom" without explicit "bed" suffix (Yardi uses "One Bedroom/Two Bath" etc.)
+  if (brCount === null) {
+    const wordOnly = low.match(/\b(one|two|three|four|five)\s+bedroom/);
+    if (wordOnly) brCount = wordMap[wordOnly[1]];
+  }
+
+  if (brCount !== null) return brCount + ' BR';
+
+  return s;
+}
+
+function getNormalizedBedroomTypes(allProps) {
+  const typeMap = new Map(); // normalized -> { label, order }
+  const order = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'];
+
+  allProps.forEach(p => {
+    p.unitTypes.forEach(u => {
+      const norm = normalizeUnitType(u.unitType);
+      if (!typeMap.has(norm)) {
+        let sortIdx = order.indexOf(norm);
+        if (sortIdx === -1) sortIdx = 100;
+        typeMap.set(norm, { label: norm, order: sortIdx });
+      }
+    });
+  });
+
+  return [...typeMap.entries()].sort((a,b) => a[1].order - b[1].order).map(e => e[0]);
+}
+
+function getFloorplansForType(prop, normType) {
+  return prop.unitTypes.filter(u => normalizeUnitType(u.unitType) === normType);
+}
+
+function getAggregatedForType(prop, normType) {
+  const fps = getFloorplansForType(prop, normType);
+  if (fps.length === 0) return null;
+  const totalUnits = fps.reduce((s,f) => s + f.units, 0);
+  if (totalUnits === 0) return null;
+  const wtdRent = fps.reduce((s,f) => s + f.marketRent * f.units, 0) / totalUnits;
+  const wtdSF = fps.reduce((s,f) => s + f.sqft * f.units, 0) / totalUnits;
+  return { units: totalUnits, sqft: Math.round(wtdSF), marketRent: Math.round(wtdRent), rentPerSqft: wtdSF > 0 ? wtdRent / wtdSF : null };
+}
+
+// ── Tab Switching ──
+function switchTab(tab) {
+  const tabNames = ['setup','dashboard','tables','saved'];
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabNames[i] === tab));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'tables') renderTables();
+  if (tab === 'saved') renderSavedList();
+}
+
+// ── Drop Zone ──
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('dragover'); }));
+dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); e.target.value = ''; });
+
+function handleFiles(fileList) {
+  Array.from(fileList).filter(f => /\.(xlsx?|xlsm|csv)$/i.test(f.name)).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const parsed = parseYardiWorkbook(wb, file.name);
+        if (parsed) { properties.push(parsed); notify(parsed.name + ' loaded — ' + parsed.unitTypes.length + ' floorplans', 'success'); renderPropertyCards(); }
+      } catch (err) { notify('Error reading ' + file.name + ': ' + err.message, 'error'); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── Yardi Parser ──
+function parseYardiWorkbook(wb, fileName) {
+  const sheet1 = wb.Sheets[wb.SheetNames[0]];
+  const sheet2 = wb.SheetNames.length > 1 ? wb.Sheets[wb.SheetNames[1]] : null;
+  const cv = (ref) => { const c = sheet1[ref]; return c ? (c.v !== undefined ? c.v : '') : ''; };
+
+  const propName = String(cv('B3') || '').trim();
+  const address = String(cv('B4') || '').trim();
+  const market = String(cv('B5') || '').trim();
+  const submarket = String(cv('B6') || '').trim();
+  const totalUnits = parseFloat(cv('B7')) || 0;
+
+  if (!propName) { notify('Could not find property name in ' + fileName, 'error'); return null; }
+
+  let headerRow = 13;
+  for (let r = 10; r <= 20; r++) { if (String(cv('A' + r) || '').toLowerCase().trim() === 'unit type') { headerRow = r; break; } }
+
+  const monthCols = [];
+  const colLetters = ['D','E','F','G','H','I','J','K','L','M','N','O'];
+  const monthHeaders = [];
+  colLetters.forEach(col => { const val = String(cv(col + headerRow) || '').trim(); if (val) { monthCols.push(col); monthHeaders.push(val); } });
+
+  const unitTypes = [];
+  for (let r = headerRow + 1; r <= headerRow + 30; r++) {
+    const unitType = String(cv('A' + r) || '').trim();
+    const units = parseFloat(cv('B' + r)) || 0;
+    const sqft = parseFloat(cv('C' + r)) || 0;
+
+    const monthlyRents = {};
+    monthCols.forEach((col, mi) => { const v = parseFloat(cv(col + r)); if (!isNaN(v) && v > 0) monthlyRents[monthHeaders[mi]] = v; });
+
+    if (Object.keys(monthlyRents).length === 0 && !unitType && units === 0) break;
+    if (!unitType && units > 0) continue;
+    if (!unitType) continue;
+
+    const mostRecentRent = monthCols.length > 0 ? (parseFloat(cv(monthCols[monthCols.length - 1] + r)) || 0) : 0;
+
+    let monthlyPerSF = {};
+    let mostRecentPerSF = null;
+    if (sheet2) {
+      const cv2 = (ref) => { const c = sheet2[ref]; return c ? (c.v !== undefined ? c.v : '') : ''; };
+      monthCols.forEach((col, mi) => { const v = parseFloat(cv2(col + r)); if (!isNaN(v) && v > 0) monthlyPerSF[monthHeaders[mi]] = v; });
+      if (monthCols.length > 0) mostRecentPerSF = parseFloat(cv2(monthCols[monthCols.length - 1] + r)) || null;
+    }
+
+    unitTypes.push({
+      unitType, units, sqft, marketRent: mostRecentRent,
+      rentPerSqft: mostRecentPerSF || (sqft > 0 && mostRecentRent > 0 ? mostRecentRent / sqft : null),
+      monthlyRents, monthlyPerSF
+    });
+  }
+
+  if (unitTypes.length === 0) { notify('No unit data in ' + fileName, 'error'); return null; }
+  const id = 'prop_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  return { id, name: propName, address, market, submarket, totalUnits, fileName, unitTypes, monthHeaders };
+}
+
+// ── Property Cards ──
+function renderPropertyCards() {
+  const section = document.getElementById('propertiesSection');
+  const container = document.getElementById('propertyCards');
+  if (properties.length === 0) { section.style.display = 'none'; document.getElementById('clearBtn').style.display = 'none'; return; }
+  section.style.display = 'block';
+  document.getElementById('clearBtn').style.display = 'inline-flex';
+  document.getElementById('propCount').textContent = properties.length + ' propert' + (properties.length === 1 ? 'y' : 'ies') + ' loaded';
+  container.innerHTML = '';
+  properties.forEach(prop => {
+    const wtdRent = prop.totalUnits > 0 ? prop.unitTypes.reduce((s,u) => s + u.marketRent * u.units, 0) / prop.totalUnits : 0;
+    const card = document.createElement('div'); card.className = 'property-card';
+    card.innerHTML = `<div class="name">${esc(prop.name)}</div>
+      ${prop.address ? '<div class="address">' + esc(prop.address) + '</div>' : ''}
+      <div class="meta">
+        <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>${prop.totalUnits} units</span>
+        <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>${prop.unitTypes.length} types</span>
+        <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>$${Math.round(wtdRent).toLocaleString()}</span>
+      </div>
+      <div class="actions"><button class="btn btn-remove" onclick="removeProperty('${prop.id}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Remove</button></div>`;
+    container.appendChild(card);
+  });
+}
+
+function removeProperty(id) { properties = properties.filter(p => p.id !== id); renderPropertyCards(); }
+
+function clearAll() {
+  properties = []; subjectProperty = null;
+  document.getElementById('subjectName').value = '';
+  document.getElementById('subjectTotalUnits').value = '';
+  document.getElementById('subjectYearBuilt').value = '';
+  document.getElementById('subjectMixBody').innerHTML = '';
+  initSubjectRows(); renderPropertyCards();
+  document.getElementById('exportBtn').disabled = true;
+  document.getElementById('dashboardContent').style.display = 'none';
+  document.getElementById('dashboardEmpty').style.display = 'block';
+  document.getElementById('tablesContent').style.display = 'none';
+  document.getElementById('tablesEmpty').style.display = 'block';
+  destroyCharts();
+}
+
+// ── Subject Form ──
+function initSubjectRows() {
+  const body = document.getElementById('subjectMixBody');
+  if (body.children.length === 0) ['Studio','1 BR','2 BR','3 BR'].forEach(t => addSubjectRow(t));
+}
+initSubjectRows();
+
+function addSubjectRow(defaultType) {
+  const body = document.getElementById('subjectMixBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><input type="text" placeholder="e.g. 1 BR" value="${defaultType || ''}"></td>
+    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)"></td>
+    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)"></td>
+    <td><input type="number" placeholder="$0" min="0" oninput="calcSubjectRow(this)"></td>
+    <td class="calc-cell">—</td><td class="calc-cell">—</td>
+    <td><button class="btn btn-remove" style="padding:0.15rem 0.4rem;font-size:0.7rem;" onclick="this.closest('tr').remove();updateSubjectTotals();">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button></td>`;
+  body.appendChild(tr);
+}
+
+function calcSubjectRow(el) {
+  const tr = el.closest('tr'), inputs = tr.querySelectorAll('input');
+  const sqft = parseFloat(inputs[2].value) || 0, rent = parseFloat(inputs[3].value) || 0;
+  tr.querySelectorAll('.calc-cell')[0].textContent = sqft > 0 && rent > 0 ? '$' + (rent / sqft).toFixed(2) : '—';
+  updateSubjectTotals();
+}
+
+function updateSubjectTotals() {
+  const rows = document.getElementById('subjectMixBody').querySelectorAll('tr');
+  let totalUnits = 0;
+  rows.forEach(tr => { totalUnits += parseFloat(tr.querySelectorAll('input')[1].value) || 0; });
+  document.getElementById('subjectTotalUnits').value = totalUnits || '';
+  rows.forEach(tr => {
+    const units = parseFloat(tr.querySelectorAll('input')[1].value) || 0;
+    tr.querySelectorAll('.calc-cell')[1].textContent = totalUnits > 0 ? (units / totalUnits * 100).toFixed(1) + '%' : '—';
+  });
+}
+
+function applySubject() {
+  const name = document.getElementById('subjectName').value.trim();
+  if (!name) { notify('Enter a subject property name', 'error'); return; }
+  if (properties.length === 0) { notify('Upload at least one Yardi file first', 'error'); return; }
+  const rows = document.getElementById('subjectMixBody').querySelectorAll('tr');
+  const unitTypes = [];
+  rows.forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const ut = inputs[0].value.trim(), units = parseFloat(inputs[1].value) || 0, sqft = parseFloat(inputs[2].value) || 0, rent = parseFloat(inputs[3].value) || 0;
+    if (ut && (units > 0 || rent > 0)) unitTypes.push({ unitType: ut, units, sqft, marketRent: rent, rentPerSqft: sqft > 0 ? rent / sqft : null, monthlyRents: {}, monthlyPerSF: {} });
+  });
+  if (unitTypes.length === 0) { notify('Add at least one unit type with data', 'error'); return; }
+  subjectProperty = { id: 'subject', name, unitTypes, totalUnits: unitTypes.reduce((s,u) => s + u.units, 0), yearBuilt: document.getElementById('subjectYearBuilt').value, monthHeaders: [] };
+  document.getElementById('exportBtn').disabled = false;
+  notify('Subject applied — switching to Dashboard', 'success');
+  switchTab('dashboard');
+}
+
+function getAllProperties() { return subjectProperty ? [subjectProperty, ...properties] : [...properties]; }
+
+// ── Dashboard ──
+function renderDashboard() {
+  if (!subjectProperty || properties.length === 0) { document.getElementById('dashboardContent').style.display = 'none'; document.getElementById('dashboardEmpty').style.display = 'block'; return; }
+  document.getElementById('dashboardContent').style.display = 'block'; document.getElementById('dashboardEmpty').style.display = 'none';
+  renderSummaryStats(); renderCharts();
+}
+
+function renderSummaryStats() {
+  const container = document.getElementById('summaryStats');
+  const subj = subjectProperty, sT = subj.totalUnits || 1;
+  const sWR = subj.unitTypes.reduce((s,u) => s + u.marketRent * u.units, 0) / sT;
+  const sWS = subj.unitTypes.reduce((s,u) => s + u.sqft * u.units, 0) / sT;
+  const sPerSF = sWS > 0 ? sWR / sWS : 0;
+  let compRents = [];
+  properties.forEach(p => { const t = p.totalUnits || 1; const r = p.unitTypes.reduce((s,u) => s + u.marketRent * u.units, 0) / t; if (r > 0) compRents.push(r); });
+  const avgComp = compRents.length > 0 ? compRents.reduce((a,b)=>a+b,0)/compRents.length : 0;
+  const diff = avgComp > 0 ? sWR - avgComp : 0, diffPct = avgComp > 0 ? diff / avgComp * 100 : 0;
+  container.innerHTML = `
+    <div class="stat-card"><div class="stat-label">Subject Wtd Avg Rent</div><div class="stat-value">$${Math.round(sWR).toLocaleString()}</div><div class="stat-sub">${esc(subj.name)}</div></div>
+    <div class="stat-card neutral"><div class="stat-label">Avg Comp Rent</div><div class="stat-value">$${Math.round(avgComp).toLocaleString()}</div><div class="stat-sub">${properties.length} comp${properties.length!==1?'s':''}</div></div>
+    <div class="stat-card ${diff>=0?'positive':'negative'}"><div class="stat-label">Subject vs Comp Avg</div><div class="stat-value">${diff>=0?'+':''}$${Math.round(diff).toLocaleString()}</div><div class="stat-sub">${diffPct>=0?'+':''}${diffPct.toFixed(1)}%</div></div>
+    <div class="stat-card"><div class="stat-label">Subject $/SF</div><div class="stat-value">$${sPerSF.toFixed(2)}</div><div class="stat-sub">${Math.round(sWS).toLocaleString()} avg SF</div></div>`;
+}
+
+function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
+
+function renderCharts() {
+  destroyCharts();
+  const all = getAllProperties();
+  const labels = all.map(p => p.id === 'subject' ? p.name + ' (Subject)' : p.name);
+  const colorMap = all.map((p,i) => p.id === 'subject' ? SUBJECT_COLOR : COMP_COLORS[(i-1)%COMP_COLORS.length]);
+  const normTypes = getNormalizedBedroomTypes(all);
+  const chartFont = { family: "Calibri, 'Segoe UI', sans-serif" };
+  const defaultOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, ...chartFont } } } } };
+
+  // Aggregated data per normalized type per property
+  function aggData(prop, nt, field) { const a = getAggregatedForType(prop, nt); return a ? a[field] : null; }
+
+  charts.rentByType = new Chart(document.getElementById('chartRentByType'), {
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'marketRent')), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } }, x: { ticks: { font: chartFont } } } }
+  });
+
+  charts.rentPerSF = new Chart(document.getElementById('chartRentPerSF'), {
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => { const a = getAggregatedForType(p,nt); return a && a.rentPerSqft ? Math.round(a.rentPerSqft*100)/100 : null; }), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>'$'+v.toFixed(2), font: chartFont } }, x: { ticks: { font: chartFont } } } }
+  });
+
+  charts.unitCount = new Chart(document.getElementById('chartUnitCount'), {
+    type: 'bar', data: { labels: labels, datasets: [{ label: 'Total Units', data: all.map(p=>p.totalUnits), backgroundColor: colorMap.map(c=>c+'99'), borderColor: colorMap, borderWidth: 1, borderRadius: 2 }] },
+    options: { indexAxis: 'y', ...defaultOpts, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { font: chartFont } }, y: { ticks: { font: chartFont } } } }
+  });
+
+  charts.sqftComp = new Chart(document.getElementById('chartSqftComp'), {
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'sqft')), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>v.toLocaleString()+' SF', font: chartFont } }, x: { ticks: { font: chartFont } } } }
+  });
+
+  const subj = subjectProperty, sRent = subj.totalUnits>0 ? subj.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/subj.totalUnits : 0;
+  const diffs = properties.map(p => { const t=p.totalUnits||1; return p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t - sRent; });
+  charts.rentDiff = new Chart(document.getElementById('chartRentDiff'), {
+    type: 'bar', data: { labels: properties.map(p=>p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d=>d>=0?'rgba(46,125,79,0.5)':'rgba(185,74,72,0.5)'), borderColor: diffs.map(d=>d>=0?'#2e7d4f':'#b94a48'), borderWidth: 1, borderRadius: 2 }] },
+    options: { ...defaultOpts, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v=>(v>=0?'+$':'-$')+Math.abs(v).toLocaleString(), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
+  });
+
+  charts.unitMix = new Chart(document.getElementById('chartUnitMix'), {
+    type: 'bar', data: { labels: labels, datasets: normTypes.map((nt,ni) => ({ label: nt, data: all.map(p => { const a = getAggregatedForType(p,nt); return a ? (a.units / (p.totalUnits||1) * 100) : 0; }), backgroundColor: UNIT_TYPE_COLORS[ni%UNIT_TYPE_COLORS.length]+'88', borderColor: UNIT_TYPE_COLORS[ni%UNIT_TYPE_COLORS.length], borderWidth: 1 })) },
+    options: { ...defaultOpts, scales: { x: { stacked: true, ticks: { font: { ...chartFont, size: 10 } } }, y: { stacked: true, max: 100, ticks: { callback: v=>v+'%', font: chartFont } } } }
+  });
+
+  const scatterData = all.map(p => { const t=p.totalUnits||1; return { x: Math.round(p.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/t), y: Math.round(p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t) }; });
+  charts.scatter = new Chart(document.getElementById('chartScatter'), {
+    type: 'scatter', data: { datasets: all.map((p,pi) => ({ label: labels[pi], data: [scatterData[pi]], backgroundColor: colorMap[pi], borderColor: colorMap[pi], pointRadius: p.id==='subject'?10:7, pointStyle: p.id==='subject'?'star':'circle' })) },
+    options: { ...defaultOpts, plugins: { ...defaultOpts.plugins, tooltip: { callbacks: { label: ctx => ctx.dataset.label+': '+ctx.raw.x.toLocaleString()+' SF, $'+ctx.raw.y.toLocaleString() } } }, scales: { x: { title: { display: true, text: 'Weighted Avg SF', font: chartFont }, ticks: { font: chartFont } }, y: { title: { display: true, text: 'Weighted Avg Rent ($)', font: chartFont }, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } } } }
+  });
+
+  const trendProps = properties.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
+  if (trendProps.length > 0) {
+    const months = trendProps[0].monthHeaders;
+    charts.trend = new Chart(document.getElementById('chartTrend'), {
+      type: 'line', data: { labels: months, datasets: trendProps.map((p,pi) => {
+        const data = months.map(m => { let tR=0,tU=0; p.unitTypes.forEach(u=>{if(u.monthlyRents[m]){tR+=u.monthlyRents[m]*u.units;tU+=u.units;}}); return tU>0?Math.round(tR/tU):null; });
+        return { label: p.name, data, borderColor: COMP_COLORS[pi%COMP_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+      }) },
+      options: { ...defaultOpts, scales: { y: { ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
+    });
+  }
+}
+
+// ── Tables ──
+function renderTables() {
+  if (!subjectProperty || properties.length === 0) { document.getElementById('tablesContent').style.display = 'none'; document.getElementById('tablesEmpty').style.display = 'block'; return; }
+  document.getElementById('tablesContent').style.display = 'block'; document.getElementById('tablesEmpty').style.display = 'none';
+  renderSummaryTable();
+  renderUnitTypeTables();
+}
+
+function renderSummaryTable() {
+  const head = document.getElementById('summaryHead'), body = document.getElementById('summaryBody');
+  const all = getAllProperties();
+  head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Total Units</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
+  let b = '';
+  all.forEach(p => {
+    const isS = p.id==='subject', cls = isS?' class="subject-col"':'';
+    const t=p.totalUnits||1, wR=p.unitTypes.reduce((a,u)=>a+u.marketRent*u.units,0)/t, wS=p.unitTypes.reduce((a,u)=>a+u.sqft*u.units,0)/t;
+    const rents=p.unitTypes.filter(u=>u.marketRent>0).map(u=>u.marketRent);
+    b += `<tr><td${cls} style="font-weight:700;font-family:var(--serif)">${esc(p.name)}${isS?' <span class="badge badge-subject">Subject</span>':''}</td>`;
+    b += `<td${cls}>${p.address||'—'}</td><td${cls}>${p.market||'—'}</td>`;
+    b += `<td${cls}>${p.totalUnits}</td><td${cls}>${p.unitTypes.length}</td>`;
+    b += `<td${cls}>${fmtN(Math.round(wS))}</td><td${cls}>${fmtC(Math.round(wR))}</td>`;
+    b += `<td${cls}>${wS>0?'$'+(wR/wS).toFixed(2):'—'}</td>`;
+    b += `<td${cls}>${rents.length?fmtC(Math.min(...rents)):'—'}</td>`;
+    b += `<td${cls}>${rents.length?fmtC(Math.max(...rents)):'—'}</td></tr>`;
+  });
+  body.innerHTML = b;
+}
+
+function renderUnitTypeTables() {
+  const container = document.getElementById('unitTypeTables');
+  container.innerHTML = '';
+  const all = getAllProperties();
+  const normTypes = getNormalizedBedroomTypes(all);
+  const subj = subjectProperty;
+
+  normTypes.forEach(normType => {
+    const hasData = all.some(p => getAggregatedForType(p, normType) !== null);
+    if (!hasData) return;
+
+    const section = document.createElement('div');
+    section.className = 'unit-type-section';
+
+    const title = document.createElement('div');
+    title.className = 'unit-type-section-title';
+    title.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>${esc(normType)} Comparison`;
+    section.appendChild(title);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-wrapper';
+    const table = document.createElement('table');
+    table.className = 'comp-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Property</th><th>Units</th><th>Avg SF</th><th>Wtd Avg Rent</th><th>$/SF</th><th>Diff vs Subject ($)</th><th>Diff vs Subject (%)</th></tr>';
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const subjAgg = getAggregatedForType(subj, normType);
+    const subjRent = subjAgg ? subjAgg.marketRent : null;
+
+    if (subjAgg) {
+      const tr = document.createElement('tr');
+      const psf = subjAgg.rentPerSqft ? '$' + subjAgg.rentPerSqft.toFixed(2) : '—';
+      tr.innerHTML = `<td class="prop-name subject-col">${esc(subj.name)} <span class="badge badge-subject">Subject</span></td>
+        <td class="subject-col">${subjAgg.units}</td>
+        <td class="subject-col">${fmtN(subjAgg.sqft)}</td>
+        <td class="subject-col">${fmtC(subjAgg.marketRent)}</td>
+        <td class="subject-col">${psf}</td>
+        <td class="subject-col">—</td><td class="subject-col">—</td>`;
+      tbody.appendChild(tr);
+    }
+
+    properties.forEach(comp => {
+      const agg = getAggregatedForType(comp, normType);
+      if (!agg) return;
+      const tr = document.createElement('tr');
+      const psf = agg.rentPerSqft ? '$' + agg.rentPerSqft.toFixed(2) : '—';
+      let diffCell = '—', diffPctCell = '—';
+      if (subjRent && agg.marketRent) {
+        const d = agg.marketRent - subjRent;
+        const pct = (d / subjRent * 100).toFixed(1);
+        const cls = d >= 0 ? 'diff-positive' : 'diff-negative';
+        diffCell = `<span class="${cls}">${d>=0?'+':''}${fmtC(Math.round(d))}</span>`;
+        diffPctCell = `<span class="${cls}">${d>=0?'+':''}${pct}%</span>`;
+      }
+      tr.innerHTML = `<td class="prop-name">${esc(comp.name)}</td>
+        <td>${agg.units}</td>
+        <td>${fmtN(agg.sqft)}</td>
+        <td>${fmtC(agg.marketRent)}</td>
+        <td>${psf}</td>
+        <td>${diffCell}</td><td>${diffPctCell}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    const compAggs = properties.map(p => getAggregatedForType(p, normType)).filter(a => a !== null);
+    if (compAggs.length > 0) {
+      const avgUnits = compAggs.reduce((s,a)=>s+a.units,0);
+      const avgRent = compAggs.reduce((s,a)=>s+a.marketRent,0) / compAggs.length;
+      const avgSF = compAggs.reduce((s,a)=>s+a.sqft,0) / compAggs.length;
+      const avgPSF = avgSF > 0 ? avgRent / avgSF : null;
+      const tr = document.createElement('tr');
+      tr.className = 'totals-row';
+      let diffCell = '—', diffPctCell = '—';
+      if (subjRent && avgRent) {
+        const d = avgRent - subjRent;
+        const pct = (d / subjRent * 100).toFixed(1);
+        const cls = d >= 0 ? 'diff-positive' : 'diff-negative';
+        diffCell = `<span class="${cls}">${d>=0?'+':''}${fmtC(Math.round(d))}</span>`;
+        diffPctCell = `<span class="${cls}">${d>=0?'+':''}${pct}%</span>`;
+      }
+      tr.innerHTML = `<td class="prop-name">COMP AVERAGE</td>
+        <td>${avgUnits}</td><td>${fmtN(Math.round(avgSF))}</td><td>${fmtC(Math.round(avgRent))}</td>
+        <td>${avgPSF?'$'+avgPSF.toFixed(2):'—'}</td><td>${diffCell}</td><td>${diffPctCell}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    section.appendChild(wrapper);
+    container.appendChild(section);
+  });
+}
+
+// ── Export (ExcelJS — styled, 4-sheet format) ──
+const XL_NAVY = { argb: 'FF1B2A4A' };
+const XL_STEEL = { argb: 'FF4A6FA5' };
+const XL_WHITE = { argb: 'FFFFFFFF' };
+const XL_SUBJ_BLUE = { argb: 'FFDCE6F1' };
+const XL_ALT_GRAY = { argb: 'FFF2F2F2' };
+const XL_AVG_TAN = { argb: 'FFE8E0D0' };
+const XL_BORDER = { style: 'thin', color: { argb: 'FFD0D0D0' } };
+const XL_BORDERS = { top: XL_BORDER, bottom: XL_BORDER, left: XL_BORDER, right: XL_BORDER };
+
+function xlHdrStyle() { return { font: { name: 'Arial', bold: true, color: XL_WHITE, size: 10 }, fill: { type: 'pattern', pattern: 'solid', fgColor: XL_NAVY }, alignment: { horizontal: 'center', wrapText: true }, border: XL_BORDERS }; }
+function xlBodyStyle(fill) { return { font: { name: 'Arial', size: 10 }, fill: fill ? { type: 'pattern', pattern: 'solid', fgColor: fill } : undefined, border: XL_BORDERS, alignment: { horizontal: 'center' } }; }
+function xlBoldStyle(fill) { const s = xlBodyStyle(fill); s.font = { name: 'Arial', size: 10, bold: true }; return s; }
+function xlApplyStyle(cell, style) {
+  if (style.font) cell.font = style.font;
+  if (style.fill) cell.fill = style.fill;
+  if (style.alignment) cell.alignment = style.alignment;
+  if (style.border) cell.border = style.border;
+}
+function xlWriteHdrRow(ws, rowNum, headers) {
+  const row = ws.getRow(rowNum);
+  headers.forEach((h, i) => { const c = row.getCell(i + 1); c.value = h; xlApplyStyle(c, xlHdrStyle()); });
+  row.commit();
+}
+function xlWriteDataCell(ws, rowNum, col, value, style, numFmt) {
+  const c = ws.getRow(rowNum).getCell(col);
+  c.value = value;
+  xlApplyStyle(c, style);
+  if (numFmt) c.numFmt = numFmt;
+}
+
+function getWtdRentForMonth(prop, normType, month) {
+  const fps = getFloorplansForType(prop, normType);
+  let tR = 0, tU = 0;
+  fps.forEach(fp => { const v = fp.monthlyRents ? fp.monthlyRents[month] : null; if (v && v > 0) { tR += v * fp.units; tU += fp.units; } });
+  return tU > 0 ? tR / tU : null;
+}
+function getWtdPsfForMonth(prop, normType, month) {
+  const fps = getFloorplansForType(prop, normType);
+  let tR = 0, tU = 0;
+  fps.forEach(fp => { const v = fp.monthlyPerSF ? fp.monthlyPerSF[month] : null; if (v && v > 0) { tR += v * fp.units; tU += fp.units; } });
+  return tU > 0 ? tR / tU : null;
+}
+
+function renderChartToBase64(config, w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+  document.body.appendChild(canvas);
+  const cfg = JSON.parse(JSON.stringify(config));
+  cfg.options = cfg.options || {};
+  cfg.options.animation = false;
+  cfg.options.responsive = false;
+  cfg.options.devicePixelRatio = 2;
+  const chart = new Chart(canvas, cfg);
+  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  chart.destroy();
+  document.body.removeChild(canvas);
+  return base64;
+}
+
+async function exportToExcel() {
+  if (!subjectProperty || properties.length === 0) return;
+  const subj = subjectProperty, comps = properties, all = getAllProperties();
+  const normTypes = getNormalizedBedroomTypes(all);
+  const BED_TYPES = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'].filter(bt => normTypes.includes(bt));
+
+  let months = [];
+  comps.forEach(p => { if (p.monthHeaders && p.monthHeaders.length > 0 && months.length === 0) months = p.monthHeaders; });
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Banner Real Estate Group';
+
+  // ── Sheet 1: Summary ──
+  const ws1 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: '1B2A4A' } } });
+  ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }];
+
+  const titleCell = ws1.getCell('A1'); titleCell.value = 'Rent Comp Analysis'; titleCell.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
+  const subCell = ws1.getCell('A2'); subCell.value = 'Subject: ' + subj.name; subCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+  const dateCell = ws1.getCell('A3'); dateCell.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+
+  const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF'];
+  xlWriteHdrRow(ws1, 5, sumHeaders);
+
+  const mostRecent = months.length > 0 ? months[months.length - 1] : null;
+
+  all.forEach((p, pi) => {
+    const r = 6 + pi;
+    const isS = p.id === 'subject';
+    const fps = p.unitTypes;
+    const tU = p.totalUnits || fps.reduce((s, u) => s + u.units, 0);
+    const avgSF = tU > 0 ? fps.reduce((s, u) => s + u.sqft * u.units, 0) / tU : 0;
+    let avgRent = 0;
+    if (isS) {
+      avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
+    } else if (mostRecent) {
+      let trR = 0, trU = 0;
+      fps.forEach(fp => { const v = fp.monthlyRents ? fp.monthlyRents[mostRecent] : fp.marketRent; if (v && v > 0) { trR += v * fp.units; trU += fp.units; } });
+      avgRent = trU > 0 ? trR / trU : 0;
+    } else {
+      avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
+    }
+    const avgPSF = avgSF > 0 ? avgRent / avgSF : 0;
+
+    const fill = isS ? XL_SUBJ_BLUE : (pi % 2 === 1 ? XL_ALT_GRAY : null);
+    const sty = isS ? xlBoldStyle(fill) : xlBodyStyle(fill);
+    const styL = { ...sty, alignment: { horizontal: 'left' } };
+
+    xlWriteDataCell(ws1, r, 1, isS ? 'S' : pi, sty);
+    xlWriteDataCell(ws1, r, 2, p.name + (isS ? ' (Subject)' : ''), isS ? { ...xlBoldStyle(fill), alignment: { horizontal: 'left' } } : { ...xlBodyStyle(fill), alignment: { horizontal: 'left' } });
+    xlWriteDataCell(ws1, r, 3, p.address || '', { ...sty, alignment: { horizontal: 'left' } });
+    xlWriteDataCell(ws1, r, 4, p.yearBuilt || '', sty);
+    xlWriteDataCell(ws1, r, 5, tU, sty, '#,##0');
+    xlWriteDataCell(ws1, r, 6, Math.round(avgSF), sty, '#,##0');
+    xlWriteDataCell(ws1, r, 7, Math.round(avgRent), sty, '$#,##0');
+    xlWriteDataCell(ws1, r, 8, Math.round(avgPSF * 100) / 100, sty, '$#,##0.00');
+  });
+
+  if (comps.length > 0) {
+    const avgRow = 6 + all.length;
+    const avgSty = xlBoldStyle(XL_AVG_TAN);
+    const avgStyL = { ...avgSty, alignment: { horizontal: 'left' } };
+
+    let cUnits = [], cSFs = [], cRents = [];
+    comps.forEach(p => {
+      const fps = p.unitTypes;
+      const tU = p.totalUnits || fps.reduce((s, u) => s + u.units, 0);
+      const sf = tU > 0 ? fps.reduce((s, u) => s + u.sqft * u.units, 0) / tU : 0;
+      let rent = 0;
+      if (mostRecent) {
+        let trR = 0, trU = 0;
+        fps.forEach(fp => { const v = fp.monthlyRents ? fp.monthlyRents[mostRecent] : fp.marketRent; if (v > 0) { trR += v * fp.units; trU += fp.units; } });
+        rent = trU > 0 ? trR / trU : 0;
+      } else {
+        rent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
+      }
+      cUnits.push(tU); cSFs.push(sf); cRents.push(rent);
+    });
+    const aU = Math.round(cUnits.reduce((a, b) => a + b, 0) / comps.length);
+    const aSF = Math.round(cSFs.reduce((a, b) => a + b, 0) / comps.length);
+    const aR = Math.round(cRents.reduce((a, b) => a + b, 0) / comps.length);
+    const aPSF = aSF > 0 ? aR / aSF : 0;
+
+    xlWriteDataCell(ws1, avgRow, 1, '', avgSty);
+    xlWriteDataCell(ws1, avgRow, 2, 'COMP AVERAGE', avgStyL);
+    xlWriteDataCell(ws1, avgRow, 3, '', avgSty);
+    xlWriteDataCell(ws1, avgRow, 4, '', avgSty);
+    xlWriteDataCell(ws1, avgRow, 5, aU, avgSty, '#,##0');
+    xlWriteDataCell(ws1, avgRow, 6, aSF, avgSty, '#,##0');
+    xlWriteDataCell(ws1, avgRow, 7, aR, avgSty, '$#,##0');
+    xlWriteDataCell(ws1, avgRow, 8, Math.round(aPSF * 100) / 100, avgSty, '$#,##0.00');
+  }
+
+  // ── Sheet 2: Rent Trend by Bedroom ──
+  if (months.length > 0) {
+    const ws2 = wb.addWorksheet('Rent Trend by Bedroom', { properties: { tabColor: { argb: '4A6FA5' } } });
+    const colWidths = [{ width: 30 }]; months.forEach(() => colWidths.push({ width: 13 }));
+    ws2.columns = colWidths;
+
+    let row = 1;
+    BED_TYPES.forEach(bedType => {
+      const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
+      if (propsWithData.length === 0) return;
+
+      const titleC = ws2.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg Rent by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
+
+      const headers = ['Property', ...months];
+      xlWriteHdrRow(ws2, row, headers); row++;
+
+      const subjAgg = getAggregatedForType(subj, bedType);
+      if (subjAgg && subjAgg.marketRent > 0) {
+        xlWriteDataCell(ws2, row, 1, subj.name + ' (Subject)', { ...xlBoldStyle(XL_SUBJ_BLUE), alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => { xlWriteDataCell(ws2, row, 2 + mi, Math.round(subjAgg.marketRent), xlBoldStyle(XL_SUBJ_BLUE), '$#,##0'); });
+        row++;
+      }
+
+      propsWithData.forEach((comp, ci) => {
+        const fill = ci % 2 === 0 ? XL_ALT_GRAY : null;
+        xlWriteDataCell(ws2, row, 1, comp.name, { ...xlBodyStyle(fill), alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => {
+          const v = getWtdRentForMonth(comp, bedType, m);
+          xlWriteDataCell(ws2, row, 2 + mi, v ? Math.round(v) : null, xlBodyStyle(fill), '$#,##0');
+        });
+        row++;
+      });
+      row += 2;
+    });
+  }
+
+  // ── Sheet 3: PSF Trend by Bedroom ──
+  if (months.length > 0) {
+    const ws3 = wb.addWorksheet('PSF Trend by Bedroom', { properties: { tabColor: { argb: 'C9A84C' } } });
+    const colWidths = [{ width: 30 }]; months.forEach(() => colWidths.push({ width: 13 }));
+    ws3.columns = colWidths;
+
+    let row = 1;
+    BED_TYPES.forEach(bedType => {
+      const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdPsfForMonth(c, bedType, m) !== null); });
+      if (propsWithData.length === 0) return;
+
+      const titleC = ws3.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg $/SF by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
+
+      xlWriteHdrRow(ws3, row, ['Property', ...months]); row++;
+
+      const subjAgg = getAggregatedForType(subj, bedType);
+      if (subjAgg && subjAgg.rentPerSqft > 0) {
+        xlWriteDataCell(ws3, row, 1, subj.name + ' (Subject)', { ...xlBoldStyle(XL_SUBJ_BLUE), alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => { xlWriteDataCell(ws3, row, 2 + mi, Math.round(subjAgg.rentPerSqft * 100) / 100, xlBoldStyle(XL_SUBJ_BLUE), '$#,##0.00'); });
+        row++;
+      }
+
+      propsWithData.forEach((comp, ci) => {
+        const fill = ci % 2 === 0 ? XL_ALT_GRAY : null;
+        xlWriteDataCell(ws3, row, 1, comp.name, { ...xlBodyStyle(fill), alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => {
+          const v = getWtdPsfForMonth(comp, bedType, m);
+          xlWriteDataCell(ws3, row, 2 + mi, v ? Math.round(v * 100) / 100 : null, xlBodyStyle(fill), '$#,##0.00');
+        });
+        row++;
+      });
+      row += 2;
+    });
+  }
+
+  // ── Sheet 4: Unit Mix Comparison ──
+  const ws4 = wb.addWorksheet('Unit Mix Comparison', { properties: { tabColor: { argb: '2E7D4F' } } });
+  ws4.columns = [{ width: 30 }, { width: 12 }, ...BED_TYPES.map(() => ({ width: 12 }))];
+
+  const mixTitle = ws4.getCell('A1'); mixTitle.value = 'Unit Mix Comparison (% of Total Units)'; mixTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY };
+
+  xlWriteHdrRow(ws4, 3, ['Property', 'Total Units', ...BED_TYPES]);
+
+  all.forEach((p, pi) => {
+    const r = 4 + pi;
+    const isS = p.id === 'subject';
+    const tU = p.totalUnits || p.unitTypes.reduce((s, u) => s + u.units, 0);
+    const fill = isS ? XL_SUBJ_BLUE : (pi % 2 === 1 ? XL_ALT_GRAY : null);
+    const sty = isS ? xlBoldStyle(fill) : xlBodyStyle(fill);
+
+    xlWriteDataCell(ws4, r, 1, p.name + (isS ? ' (Subject)' : ''), { ...sty, alignment: { horizontal: 'left' } });
+    xlWriteDataCell(ws4, r, 2, tU, sty, '#,##0');
+
+    BED_TYPES.forEach((bt, bi) => {
+      const agg = getAggregatedForType(p, bt);
+      const pct = agg && tU > 0 ? agg.units / tU : 0;
+      xlWriteDataCell(ws4, r, 3 + bi, pct, sty, '0.0%');
+    });
+  });
+
+  // ── Sheet 5: Dashboard Charts ──
+  const wsDash = wb.addWorksheet('Dashboard Charts', { properties: { tabColor: { argb: '5A7DA8' } } });
+  wsDash.columns = Array(12).fill({ width: 10 });
+
+  const chartLabels = all.map(p => p.id === 'subject' ? p.name + ' (Subject)' : p.name);
+  const chartColors = all.map((p, i) => p.id === 'subject' ? SUBJECT_COLOR : COMP_COLORS[(i - 1) % COMP_COLORS.length]);
+  const chartFont = { family: "Calibri, sans-serif" };
+  const defaultChartOpts = { responsive: false, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, ...chartFont } } } }, backgroundColor: '#ffffff' };
+  function aggDataX(prop, nt, field) { const a = getAggregatedForType(prop, nt); return a ? a[field] : null; }
+
+  const CW = 700, CH = 360;
+  let dashRow = 1;
+
+  const dashTitle = wsDash.getCell('A1'); dashTitle.value = 'Dashboard Charts'; dashTitle.font = { name: 'Arial', size: 16, bold: true, color: XL_NAVY }; dashRow = 3;
+
+  // Chart 1: Market Rent by Bedroom Type
+  try {
+    const img1 = renderChartToBase64({
+      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => aggDataX(p, nt, 'marketRent')), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Market Rent by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } } } }
+    }, CW, CH);
+    const imgId1 = wb.addImage({ base64: img1, extension: 'png' });
+    wsDash.addImage(imgId1, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 2: Rent Per SF by Bedroom Type
+  try {
+    const img2 = renderChartToBase64({
+      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => { const a = getAggregatedForType(p, nt); return a && a.rentPerSqft ? Math.round(a.rentPerSqft * 100) / 100 : null; }), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: '$/SF by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(2) } } } }
+    }, CW, CH);
+    const imgId2 = wb.addImage({ base64: img2, extension: 'png' });
+    wsDash.addImage(imgId2, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 3: Unit Count
+  try {
+    const img3 = renderChartToBase64({
+      type: 'bar', data: { labels: chartLabels, datasets: [{ label: 'Total Units', data: all.map(p => p.totalUnits), backgroundColor: chartColors.map(c => c + '99'), borderColor: chartColors, borderWidth: 1, borderRadius: 2 }] },
+      options: { indexAxis: 'y', ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false }, title: { display: true, text: 'Total Units by Property', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { beginAtZero: true } } }
+    }, CW, CH);
+    const imgId3 = wb.addImage({ base64: img3, extension: 'png' });
+    wsDash.addImage(imgId3, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 4: Avg SF by Bedroom Type
+  try {
+    const img4 = renderChartToBase64({
+      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => aggDataX(p, nt, 'sqft')), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Avg SF by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() + ' SF' } } } }
+    }, CW, CH);
+    const imgId4 = wb.addImage({ base64: img4, extension: 'png' });
+    wsDash.addImage(imgId4, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 5: Rent Diff vs Subject
+  try {
+    const sRent = subj.totalUnits > 0 ? subj.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / subj.totalUnits : 0;
+    const diffs = comps.map(p => { const t = p.totalUnits || 1; return p.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / t - sRent; });
+    const img5 = renderChartToBase64({
+      type: 'bar', data: { labels: comps.map(p => p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d => d >= 0 ? 'rgba(46,125,79,0.5)' : 'rgba(185,74,72,0.5)'), borderColor: diffs.map(d => d >= 0 ? '#2e7d4f' : '#b94a48'), borderWidth: 1, borderRadius: 2 }] },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false }, title: { display: true, text: 'Rent Premium/Discount vs Subject', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toLocaleString() } } } }
+    }, CW, CH);
+    const imgId5 = wb.addImage({ base64: img5, extension: 'png' });
+    wsDash.addImage(imgId5, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 6: Unit Mix
+  try {
+    const img6 = renderChartToBase64({
+      type: 'bar', data: { labels: chartLabels, datasets: BED_TYPES.map((nt, ni) => ({ label: nt, data: all.map(p => { const a = getAggregatedForType(p, nt); return a ? (a.units / (p.totalUnits || 1) * 100) : 0; }), backgroundColor: UNIT_TYPE_COLORS[ni % UNIT_TYPE_COLORS.length] + '88', borderColor: UNIT_TYPE_COLORS[ni % UNIT_TYPE_COLORS.length], borderWidth: 1 })) },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Unit Mix Distribution (%)', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { stacked: true }, y: { stacked: true, max: 100, ticks: { callback: v => v + '%' } } } }
+    }, CW, CH);
+    const imgId6 = wb.addImage({ base64: img6, extension: 'png' });
+    wsDash.addImage(imgId6, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // Chart 7: SF vs Rent Scatter
+  try {
+    const scatterData = all.map(p => { const t = p.totalUnits || 1; return { x: Math.round(p.unitTypes.reduce((s, u) => s + u.sqft * u.units, 0) / t), y: Math.round(p.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / t) }; });
+    const img7 = renderChartToBase64({
+      type: 'scatter', data: { datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: [scatterData[pi]], backgroundColor: chartColors[pi], borderColor: chartColors[pi], pointRadius: p.id === 'subject' ? 10 : 7, pointStyle: p.id === 'subject' ? 'star' : 'circle' })) },
+      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Rent vs SF (Weighted Avg)', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { title: { display: true, text: 'Weighted Avg SF' } }, y: { title: { display: true, text: 'Weighted Avg Rent ($)' }, ticks: { callback: v => '$' + v.toLocaleString() } } } }
+    }, CW, CH);
+    const imgId7 = wb.addImage({ base64: img7, extension: 'png' });
+    wsDash.addImage(imgId7, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
+    dashRow += Math.ceil(CH / 20) + 2;
+  } catch(e) { console.warn('Chart render failed:', e); }
+
+  // ── Sheet 6: Rent Trends by Property ──
+  if (months.length > 0) {
+    const wsT = wb.addWorksheet('Rent Trends by Property', { properties: { tabColor: { argb: 'A8706A' } } });
+    wsT.columns = Array(12).fill({ width: 10 });
+    let tRow = 1;
+    const tTitle = wsT.getCell('A1'); tTitle.value = 'Monthly Rent Trends by Property'; tTitle.font = { name: 'Arial', size: 16, bold: true, color: XL_NAVY }; tRow = 3;
+
+    const trendAll = comps.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
+
+    trendAll.forEach(prop => {
+      const propBedTypes = BED_TYPES.filter(bt => {
+        const fps = getFloorplansForType(prop, bt);
+        return fps.length > 0 && months.some(m => getWtdRentForMonth(prop, bt, m) !== null);
+      });
+      if (propBedTypes.length === 0) return;
+
+      // Rent chart for this property
+      try {
+        const datasets = propBedTypes.map((bt, bi) => {
+          const data = months.map(m => { const v = getWtdRentForMonth(prop, bt, m); return v ? Math.round(v) : null; });
+          return { label: bt, data, borderColor: UNIT_TYPE_COLORS[bi % UNIT_TYPE_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+        });
+        const imgP = renderChartToBase64({
+          type: 'line', data: { labels: months, datasets },
+          options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: prop.name + ' — Monthly Rent by Unit Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } } }
+        }, CW, CH);
+        const imgIdP = wb.addImage({ base64: imgP, extension: 'png' });
+        wsT.addImage(imgIdP, { tl: { col: 0, row: tRow }, ext: { width: CW, height: CH } });
+        tRow += Math.ceil(CH / 20) + 2;
+      } catch(e) { console.warn('Property rent trend failed:', e); }
+
+      // $/SF chart for this property
+      const psfBedTypes = BED_TYPES.filter(bt => {
+        const fps = getFloorplansForType(prop, bt);
+        return fps.length > 0 && months.some(m => getWtdPsfForMonth(prop, bt, m) !== null);
+      });
+      if (psfBedTypes.length > 0) {
+        try {
+          const datasets = psfBedTypes.map((bt, bi) => {
+            const data = months.map(m => { const v = getWtdPsfForMonth(prop, bt, m); return v ? Math.round(v * 100) / 100 : null; });
+            return { label: bt, data, borderColor: UNIT_TYPE_COLORS[bi % UNIT_TYPE_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+          });
+          const imgPSF = renderChartToBase64({
+            type: 'line', data: { labels: months, datasets },
+            options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: prop.name + ' — Monthly $/SF by Unit Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => '$' + v.toFixed(2) } } } }
+          }, CW, CH);
+          const imgIdPSF = wb.addImage({ base64: imgPSF, extension: 'png' });
+          wsT.addImage(imgIdPSF, { tl: { col: 0, row: tRow }, ext: { width: CW, height: CH } });
+          tRow += Math.ceil(CH / 20) + 2;
+        } catch(e) { console.warn('Property PSF trend failed:', e); }
+      }
+    });
+  }
+
+  // ── Download ──
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Rent_Comp_' + subj.name.replace(/[^a-zA-Z0-9]/g, '_') + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Excel exported successfully', 'success');
+}
+
+// ── Saved Comparisons ──
+const STORAGE_KEY = 'rentCompSaved';
+
+function getSavedComparisons() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+
+function saveComparison() {
+  const nameInput = document.getElementById('saveCompName');
+  let name = nameInput.value.trim();
+  if (!subjectProperty || properties.length === 0) { notify('Load comps and apply a subject first', 'error'); return; }
+  if (!name) name = subjectProperty.name + ' vs ' + properties.length + ' comp' + (properties.length !== 1 ? 's' : '');
+
+  const saved = getSavedComparisons();
+  saved.unshift({
+    id: 'save_' + Date.now(),
+    name: name,
+    date: new Date().toISOString(),
+    subject: JSON.parse(JSON.stringify(subjectProperty)),
+    comps: JSON.parse(JSON.stringify(properties))
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  nameInput.value = '';
+  notify('Comparison saved: ' + name, 'success');
+  renderSavedList();
+}
+
+function renderSavedList() {
+  const saved = getSavedComparisons();
+  const container = document.getElementById('savedList');
+  const empty = document.getElementById('savedEmpty');
+  const countEl = document.getElementById('savedCount');
+  countEl.textContent = saved.length + ' saved comparison' + (saved.length !== 1 ? 's' : '');
+
+  if (saved.length === 0) { empty.style.display = 'block'; container.innerHTML = ''; return; }
+  empty.style.display = 'none';
+  container.innerHTML = '';
+
+  saved.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'saved-card';
+    const d = new Date(s.date);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const compNames = s.comps.map(c => c.name).join(', ');
+    card.innerHTML = `<div class="saved-name">${esc(s.name)}</div>
+      <div class="saved-date">${dateStr}</div>
+      <div class="saved-meta"><strong>Subject:</strong> ${esc(s.subject.name)} (${s.subject.totalUnits} units)<br><strong>Comps:</strong> ${esc(compNames)}</div>
+      <div class="saved-actions">
+        <button class="btn btn-primary" onclick="event.stopPropagation();loadComparison('${s.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          Load
+        </button>
+        <button class="btn btn-secondary" onclick="event.stopPropagation();exportSavedToExcel('${s.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+        <button class="btn btn-remove" onclick="event.stopPropagation();deleteComparison('${s.id}')">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Delete
+        </button>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function loadComparison(id) {
+  const saved = getSavedComparisons();
+  const s = saved.find(x => x.id === id);
+  if (!s) { notify('Comparison not found', 'error'); return; }
+
+  properties = s.comps;
+  subjectProperty = s.subject;
+  renderPropertyCards();
+
+  document.getElementById('subjectName').value = s.subject.name;
+  document.getElementById('subjectYearBuilt').value = s.subject.yearBuilt || '';
+
+  const body = document.getElementById('subjectMixBody');
+  body.innerHTML = '';
+  s.subject.unitTypes.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}"></td>
+      <td><input type="number" value="${u.units}" min="0" oninput="calcSubjectRow(this)"></td>
+      <td><input type="number" value="${u.sqft}" min="0" oninput="calcSubjectRow(this)"></td>
+      <td><input type="number" value="${u.marketRent}" min="0" oninput="calcSubjectRow(this)"></td>
+      <td class="calc-cell">${u.rentPerSqft ? '$'+u.rentPerSqft.toFixed(2) : '—'}</td><td class="calc-cell">—</td>
+      <td><button class="btn btn-remove" style="padding:0.15rem 0.4rem;font-size:0.7rem;" onclick="this.closest('tr').remove();updateSubjectTotals();">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button></td>`;
+    body.appendChild(tr);
+  });
+  updateSubjectTotals();
+  document.getElementById('exportBtn').disabled = false;
+  notify('Loaded: ' + s.name, 'success');
+  switchTab('dashboard');
+}
+
+async function exportSavedToExcel(id) {
+  const saved = getSavedComparisons();
+  const s = saved.find(x => x.id === id);
+  if (!s) return;
+  const origSubj = subjectProperty, origProps = properties;
+  subjectProperty = s.subject;
+  properties = s.comps;
+  await exportToExcel();
+  subjectProperty = origSubj;
+  properties = origProps;
+}
+
+function deleteComparison(id) {
+  const saved = getSavedComparisons().filter(x => x.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  notify('Comparison deleted', 'success');
+  renderSavedList();
+}
+
+// ── Helpers ──
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function fmtC(n){return '$'+Math.abs(Math.round(n)).toLocaleString('en-US');}
+function fmtN(n){return n.toLocaleString('en-US',{maximumFractionDigits:0});}
+function notify(msg,type){const el=document.getElementById('notification');el.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'+(type==='success'?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>')+'</svg> '+esc(msg);el.className='notification '+type+' show';setTimeout(()=>el.classList.remove('show'),3500);}
+</script>
+</body>
+</html>

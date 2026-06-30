@@ -4,7 +4,7 @@
     {
       "name": "yardi-compare",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-Command", "npx http-server yardi-compare -p 3000 -c-1"],
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-Command", "$l=New-Object Net.HttpListener;$l.Prefixes.Add('http://localhost:3000/');$l.Start();while($l.IsListening){$c=$l.GetContext();$f=Join-Path 'yardi-compare' ($c.Request.Url.AbsolutePath.TrimStart('/'));if($f -eq 'yardi-compare' -or $f -eq 'yardi-compare\\'){$f='yardi-compare\\index.html'};if(Test-Path $f){$b=[IO.File]::ReadAllBytes($f);$c.Response.ContentType='text/html';$c.Response.ContentLength64=$b.Length;$c.Response.OutputStream.Write($b,0,$b.Length)}else{$c.Response.StatusCode=404};$c.Response.Close()}"],
       "port": 3000
     }
   ]

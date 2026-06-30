@@ -299,7 +299,7 @@
         <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>Unit Mix Distribution</div><div class="chart-container"><canvas id="chartUnitMix"></canvas></div></div>
       </div>
       <div class="section-gap">
-        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Weighted Avg Rent vs SF</div><div class="chart-container-lg"><canvas id="chartScatter"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Rent vs Unit Size (Bubble = Units)</div><div class="chart-container-lg"><canvas id="chartBubble"></canvas></div></div>
       </div>
       <div class="section-gap">
         <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>12-Month Rent Trend (Weighted Avg)</div><div class="chart-container-lg"><canvas id="chartTrend"></canvas></div></div>
@@ -551,12 +551,20 @@ function renderPropertyCards() {
         <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>${prop.unitTypes.length} types</span>
         <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>$${Math.round(wtdRent).toLocaleString()}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
-        <label style="font-size:0.74rem;color:var(--text-mid);white-space:nowrap;">Occupancy %</label>
-        <input type="number" min="0" max="100" step="0.1" placeholder="e.g. 94.5" value="${occVal}"
-          style="width:90px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;font-family:var(--sans);"
-          oninput="setOccupancy('${prop.id}', this.value)">
-        <span style="font-size:0.74rem;color:var(--text-mid);">%</span>
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;">
+          <label style="font-size:0.74rem;color:var(--text-mid);white-space:nowrap;">Year Built</label>
+          <input type="number" min="1900" max="2099" step="1" placeholder="e.g. 2020" value="${prop.yearBuilt || ''}"
+            style="width:80px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;font-family:var(--sans);"
+            oninput="setYearBuilt('${prop.id}', this.value)">
+        </div>
+        <div style="display:flex;align-items:center;gap:0.35rem;">
+          <label style="font-size:0.74rem;color:var(--text-mid);white-space:nowrap;">Occupancy %</label>
+          <input type="number" min="0" max="100" step="0.1" placeholder="e.g. 94.5" value="${occVal}"
+            style="width:80px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;font-family:var(--sans);"
+            oninput="setOccupancy('${prop.id}', this.value)">
+          <span style="font-size:0.74rem;color:var(--text-mid);">%</span>
+        </div>
       </div>
       <div class="actions"><button class="btn btn-remove" onclick="removeProperty('${prop.id}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Remove</button></div>`;
     container.appendChild(card);
@@ -569,12 +577,17 @@ function setOccupancy(id, val) {
   const prop = properties.find(p => p.id === id);
   if (prop) prop.occupancy = val !== '' ? parseFloat(val) : null;
 }
+function setYearBuilt(id, val) {
+  const prop = properties.find(p => p.id === id);
+  if (prop) prop.yearBuilt = val !== '' ? val : '';
+}
 
 function clearAll() {
   properties = []; subjectProperty = null;
   document.getElementById('subjectName').value = '';
   document.getElementById('subjectTotalUnits').value = '';
   document.getElementById('subjectYearBuilt').value = '';
+  document.getElementById('subjectOccupancy').value = '';
   document.getElementById('subjectMixBody').innerHTML = '';
   initSubjectRows(); renderPropertyCards();
   document.getElementById('exportBtn').disabled = true;
@@ -750,10 +763,42 @@ function renderCharts() {
     options: { ...defaultOpts, scales: { x: { stacked: true, ticks: { font: { ...chartFont, size: 10 } } }, y: { stacked: true, max: 100, ticks: { callback: v=>v+'%', font: chartFont } } } }
   });
 
-  const scatterData = all.map(p => { const t=p.totalUnits||1; return { x: Math.round(p.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/t), y: Math.round(p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t) }; });
-  charts.scatter = new Chart(document.getElementById('chartScatter'), {
-    type: 'scatter', data: { datasets: all.map((p,pi) => ({ label: labels[pi], data: [scatterData[pi]], backgroundColor: colorMap[pi], borderColor: subjBar(pi) ? SUBJECT_COLOR : '#757575', borderWidth: p.id==='subject'?3:1, pointRadius: p.id==='subject'?12:7, pointStyle: p.id==='subject'?'star':'circle' })) },
-    options: { ...defaultOpts, plugins: { ...defaultOpts.plugins, tooltip: { callbacks: { label: ctx => ctx.dataset.label+': '+ctx.raw.x.toLocaleString()+' SF, $'+ctx.raw.y.toLocaleString() } } }, scales: { x: { title: { display: true, text: 'Weighted Avg SF', font: chartFont }, ticks: { font: chartFont } }, y: { title: { display: true, text: 'Weighted Avg Rent ($)', font: chartFont }, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } } } }
+  // Bubble chart: each floorplan is a bubble, x=SF, y=Rent, r=units
+  const compBubbles = [], subjBubbles = [];
+  all.forEach(p => {
+    p.unitTypes.forEach(u => {
+      if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
+        const pt = { x: u.sqft, y: Math.round(u.marketRent), r: Math.max(4, Math.sqrt(u.units) * 4), _units: u.units, _prop: p.name, _type: u.unitType };
+        if (p.id === 'subject') subjBubbles.push(pt); else compBubbles.push(pt);
+      }
+    });
+  });
+  // Linear regression on comp data
+  let trendLine = [], eqLabel = '';
+  if (compBubbles.length >= 2) {
+    const n = compBubbles.length;
+    const sx = compBubbles.reduce((s,p)=>s+p.x,0), sy = compBubbles.reduce((s,p)=>s+p.y,0);
+    const sxx = compBubbles.reduce((s,p)=>s+p.x*p.x,0), sxy = compBubbles.reduce((s,p)=>s+p.x*p.y,0);
+    const slope = (n*sxy - sx*sy) / (n*sxx - sx*sx);
+    const intercept = (sy - slope*sx) / n;
+    const yMean = sy/n;
+    const ssTot = compBubbles.reduce((s,p)=>s+Math.pow(p.y-yMean,2),0);
+    const ssRes = compBubbles.reduce((s,p)=>s+Math.pow(p.y-(slope*p.x+intercept),2),0);
+    const r2 = ssTot > 0 ? 1 - ssRes/ssTot : 0;
+    const xMin = Math.min(...compBubbles.map(p=>p.x)), xMax = Math.max(...compBubbles.map(p=>p.x));
+    const pad = (xMax-xMin)*0.05;
+    trendLine = [{x:xMin-pad,y:slope*(xMin-pad)+intercept},{x:xMax+pad,y:slope*(xMax+pad)+intercept}];
+    eqLabel = 'y = ' + slope.toFixed(2) + 'x ' + (intercept>=0?'+ ':'− ') + Math.abs(intercept).toFixed(0) + '  (R² = ' + r2.toFixed(3) + ')';
+  }
+  const bubbleDatasets = [
+    { label: 'Comps', data: compBubbles, backgroundColor: 'rgba(55,90,127,0.45)', borderColor: 'rgba(55,90,127,0.7)', borderWidth: 1 },
+    { label: 'Subject', data: subjBubbles, backgroundColor: 'rgba(72,196,228,0.85)', borderColor: 'rgba(72,196,228,1)', borderWidth: 2 }
+  ];
+  if (trendLine.length) bubbleDatasets.push({ label: eqLabel, type: 'scatter', data: trendLine, showLine: true, borderColor: '#000', borderDash: [6,4], borderWidth: 2, pointRadius: 0, fill: false });
+  charts.bubble = new Chart(document.getElementById('chartBubble'), {
+    type: 'bubble', data: { datasets: bubbleDatasets },
+    options: { ...defaultOpts, plugins: { ...defaultOpts.plugins, tooltip: { callbacks: { label: ctx => { const r=ctx.raw; return r._prop ? r._prop+' — '+r._type+': '+r.x.toLocaleString()+' SF, $'+r.y.toLocaleString()+' ('+r._units+' units)' : ctx.dataset.label; } } } },
+      scales: { x: { title: { display: true, text: 'Avg Unit Size (SF)', font: chartFont }, ticks: { font: chartFont } }, y: { title: { display: true, text: 'Avg Monthly Rent ($)', font: chartFont }, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } } } }
   });
 
   const trendProps = properties.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
@@ -787,7 +832,7 @@ function renderSummaryTable() {
     const wRB = b.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/tB, wSB = b.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/tB;
     return (wSB>0?wRB/wSB:0) - (wSA>0?wRA/wSA:0);
   });
-  head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Total Units</th><th>Occupancy</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
+  head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Year Built</th><th>Total Units</th><th>Occupancy</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
   let b = '';
   all.forEach(p => {
     const isS = p.id==='subject', cls = isS?' class="subject-col"':'';
@@ -799,6 +844,8 @@ function renderSummaryTable() {
       : esc(p.name);
     b += `<tr><td${cls} style="font-weight:700;font-family:var(--serif)">${nameHtml}${isS?' <span class="badge badge-subject">Subject</span>':''}</td>`;
     b += `<td${cls}>${p.address||'—'}</td><td${cls}>${p.market||'—'}</td>`;
+    const yb = isS ? (subjectProperty.yearBuilt || '') : (p.yearBuilt || '');
+    b += `<td${cls}>${yb || '—'}</td>`;
     const occ = isS ? (subjectProperty.occupancy != null ? subjectProperty.occupancy : null) : p.occupancy;
     const occDisplay = occ != null ? occ.toFixed(1) + '%' : '—';
     b += `<td${cls}>${p.totalUnits}</td><td${cls}>${occDisplay}</td><td${cls}>${p.unitTypes.length}</td>`;
@@ -964,9 +1011,43 @@ function _chartSerXml(ser, idx, chartType) {
   </c:ser>`;
 }
 
+function _bubbleSerXml(ser, idx, addTrendline) {
+  const alpha = ser.alpha || 'FF';
+  return `<c:ser>
+    <c:idx val="${idx}"/>
+    <c:order val="${idx}"/>
+    <c:tx><c:v>${_xmlEsc(ser.name || 'Series ' + (idx+1))}</c:v></c:tx>
+    <c:spPr><a:solidFill><a:srgbClr val="${ser.color}"><a:alpha val="${Math.round(parseInt(alpha,16)/255*100000)}"/></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="${ser.color}"><a:alpha val="80000"/></a:srgbClr></a:solidFill></a:ln></c:spPr>
+    <c:invertIfNegative val="0"/>
+    <c:xVal><c:numRef><c:f>${_xmlEsc(ser.xValRef)}</c:f></c:numRef></c:xVal>
+    <c:yVal><c:numRef><c:f>${_xmlEsc(ser.yValRef)}</c:f></c:numRef></c:yVal>
+    <c:bubbleSize><c:numRef><c:f>${_xmlEsc(ser.bubbleSizeRef)}</c:f></c:numRef></c:bubbleSize>
+    <c:bubble3D val="0"/>
+    ${addTrendline ? `<c:trendline><c:spPr><a:ln w="15875"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="dot"/></a:ln></c:spPr><c:trendlineType val="linear"/><c:dispRSqr val="1"/><c:dispEq val="1"/></c:trendline>` : ''}
+  </c:ser>`;
+}
+
 function _buildChartXml(spec) {
-  const seriesXml = spec.series.map((s, i) => _chartSerXml(s, i, spec.type)).join('\n');
   const axIds = `<c:axId val="111111111"/><c:axId val="222222222"/>`;
+
+  if (spec.type === 'bubble') {
+    const seriesXml = spec.series.map((s, i) => _bubbleSerXml(s, i, spec.trendOnFirst && i === 0)).join('\n');
+    const plot = `<c:bubbleChart><c:varyColors val="0"/>${seriesXml}${axIds}<c:bubbleScale val="100"/></c:bubbleChart>`;
+    const xAx = `<c:valAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="#,##0" sourceLinked="0"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="900" b="1"/><a:t>Avg Unit Size (SF)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:crossAx val="222222222"/></c:valAx>`;
+    const yAx = `<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:numFmt formatCode="$#,##0" sourceLinked="0"/><c:majorGridlines/><c:title><c:tx><c:rich><a:bodyPr rot="-5400000" vert="horz"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="900" b="1"/><a:t>Avg Monthly Rent ($)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:crossAx val="111111111"/></c:valAx>`;
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:chart>
+    <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"><a:solidFill><a:srgbClr val="1B2A4A"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1"><a:solidFill><a:srgbClr val="1B2A4A"/></a:solidFill></a:rPr><a:t>${_xmlEsc(spec.title || '')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+    <c:autoTitleDeleted val="0"/>
+    <c:plotArea><c:layout/>${plot}${xAx}${yAx}</c:plotArea>
+    <c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
+    <c:plotVisOnly val="1"/>
+  </c:chart>
+</c:chartSpace>`;
+  }
+
+  const seriesXml = spec.series.map((s, i) => _chartSerXml(s, i, spec.type)).join('\n');
   const catAx = `<c:catAx>
     <c:axId val="111111111"/>
     <c:scaling><c:orientation val="minMax"/></c:scaling>
@@ -1185,13 +1266,13 @@ async function exportToExcel() {
 
   // ── Sheet 1: Summary ──
   const ws1 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: '1B2A4A' } } });
-  ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }];
+  ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }];
 
   const titleCell = ws1.getCell('A1'); titleCell.value = 'Rent Comp Analysis'; titleCell.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
   const subCell = ws1.getCell('A2'); subCell.value = 'Subject: ' + subj.name; subCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
   const dateCell = ws1.getCell('A3'); dateCell.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
 
-  const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF'];
+  const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Occupancy', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF'];
   xlWriteHdrRow(ws1, 5, sumHeaders);
 
   const mostRecent = months.length > 0 ? months[months.length - 1] : null;
@@ -1222,10 +1303,12 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, r, 2, p.name + (isS ? ' (Subject)' : ''), isS ? { ...xlBoldStyle(fill), alignment: { horizontal: 'left' } } : { ...xlBodyStyle(fill), alignment: { horizontal: 'left' } });
     xlWriteDataCell(ws1, r, 3, p.address || '', { ...sty, alignment: { horizontal: 'left' } });
     xlWriteDataCell(ws1, r, 4, p.yearBuilt || '', sty);
-    xlWriteDataCell(ws1, r, 5, tU, sty, '#,##0');
-    xlWriteDataCell(ws1, r, 6, Math.round(avgSF), sty, '#,##0');
-    xlWriteDataCell(ws1, r, 7, Math.round(avgRent), sty, '$#,##0');
-    xlWriteDataCell(ws1, r, 8, Math.round(avgPSF * 100) / 100, sty, '$#,##0.00');
+    const pOcc = isS ? (subj.occupancy != null ? subj.occupancy : '') : (p.occupancy != null ? p.occupancy : '');
+    xlWriteDataCell(ws1, r, 5, pOcc !== '' ? pOcc / 100 : '', sty, '0.0%');
+    xlWriteDataCell(ws1, r, 6, tU, sty, '#,##0');
+    xlWriteDataCell(ws1, r, 7, Math.round(avgSF), sty, '#,##0');
+    xlWriteDataCell(ws1, r, 8, Math.round(avgRent), sty, '$#,##0');
+    xlWriteDataCell(ws1, r, 9, Math.round(avgPSF * 100) / 100, sty, '$#,##0.00');
   });
 
   if (comps.length > 0) {
@@ -1257,21 +1340,22 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, avgRow, 2, 'COMP AVERAGE', avgStyL);
     xlWriteDataCell(ws1, avgRow, 3, '', avgSty);
     xlWriteDataCell(ws1, avgRow, 4, '', avgSty);
-    xlWriteDataCell(ws1, avgRow, 5, aU, avgSty, '#,##0');
-    xlWriteDataCell(ws1, avgRow, 6, aSF, avgSty, '#,##0');
-    xlWriteDataCell(ws1, avgRow, 7, aR, avgSty, '$#,##0');
-    xlWriteDataCell(ws1, avgRow, 8, Math.round(aPSF * 100) / 100, avgSty, '$#,##0.00');
+    xlWriteDataCell(ws1, avgRow, 5, '', avgSty);
+    xlWriteDataCell(ws1, avgRow, 6, aU, avgSty, '#,##0');
+    xlWriteDataCell(ws1, avgRow, 7, aSF, avgSty, '#,##0');
+    xlWriteDataCell(ws1, avgRow, 8, aR, avgSty, '$#,##0');
+    xlWriteDataCell(ws1, avgRow, 9, Math.round(aPSF * 100) / 100, avgSty, '$#,##0.00');
   }
 
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: 'Avg Rent by Property', numFmt: '$#,##0',
-    series: [{ name: 'Avg Rent', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$G$6:$G$${5 + all.length}` }],
-    anchor: { fromCol: 9, fromRow: 4, toCol: 18, toRow: 4 + Math.max(16, all.length + 4) }
+    series: [{ name: 'Avg Rent', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$H$6:$H$${5 + all.length}` }],
+    anchor: { fromCol: 10, fromRow: 4, toCol: 19, toRow: 4 + Math.max(16, all.length + 4) }
   });
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: '$/SF by Property', numFmt: '$#,##0.00',
-    series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$H$6:$H$${5 + all.length}` }],
-    anchor: { fromCol: 19, fromRow: 4, toCol: 28, toRow: 4 + Math.max(16, all.length + 4) }
+    series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$I$6:$I$${5 + all.length}` }],
+    anchor: { fromCol: 20, fromRow: 4, toCol: 29, toRow: 4 + Math.max(16, all.length + 4) }
   });
 
   // ── Sheet 2: Rent Trend by Bedroom ──
@@ -1591,6 +1675,58 @@ async function exportToExcel() {
     });
   }
 
+  // ── Bubble Analysis Tab ──
+  const wsBub = wb.addWorksheet('Bubble Analysis', { properties: { tabColor: { argb: '48C4E4' } } });
+  wsBub.columns = [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 14 }, { width: 16 }, { width: 12 }];
+  const bubTitle = wsBub.getCell('A1'); bubTitle.value = 'Rent vs Unit Size — Bubble Analysis'; bubTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
+  const bubSub = wsBub.getCell('A2'); bubSub.value = 'Each row is one floorplan. Bubble size = number of units.'; bubSub.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+  xlWriteHdrRow(wsBub, 4, ['Series', 'Property', 'Unit Type', 'Avg SF', 'Avg Rent', 'Units']);
+  let bubRow = 5, bubCompStart = 0, bubCompEnd = 0, bubSubjStart = 0, bubSubjEnd = 0;
+  // Comp rows first
+  bubCompStart = bubRow;
+  comps.forEach(p => {
+    p.unitTypes.forEach(u => {
+      if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
+        const fill = (bubRow % 2 === 0) ? XL_ALT_GRAY : null;
+        const sty = xlBodyStyle(fill); const styL = { ...sty, alignment: { horizontal: 'left' } };
+        xlWriteDataCell(wsBub, bubRow, 1, 'Comp', styL);
+        xlWriteDataCell(wsBub, bubRow, 2, p.name, styL);
+        xlWriteDataCell(wsBub, bubRow, 3, u.unitType, styL);
+        xlWriteDataCell(wsBub, bubRow, 4, u.sqft, sty, '#,##0');
+        xlWriteDataCell(wsBub, bubRow, 5, Math.round(u.marketRent), sty, '$#,##0');
+        xlWriteDataCell(wsBub, bubRow, 6, u.units, sty, '#,##0');
+        bubRow++;
+      }
+    });
+  });
+  bubCompEnd = bubRow - 1;
+  // Subject rows
+  bubSubjStart = bubRow;
+  subj.unitTypes.forEach(u => {
+    if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
+      const sty = xlBoldStyle(XL_SUBJ_BLUE); const styL = { ...sty, alignment: { horizontal: 'left' } };
+      xlWriteDataCell(wsBub, bubRow, 1, 'Subject', styL);
+      xlWriteDataCell(wsBub, bubRow, 2, subj.name, styL);
+      xlWriteDataCell(wsBub, bubRow, 3, u.unitType, styL);
+      xlWriteDataCell(wsBub, bubRow, 4, u.sqft, sty, '#,##0');
+      xlWriteDataCell(wsBub, bubRow, 5, Math.round(u.marketRent), sty, '$#,##0');
+      xlWriteDataCell(wsBub, bubRow, 6, u.units, sty, '#,##0');
+      bubRow++;
+    }
+  });
+  bubSubjEnd = bubRow - 1;
+  if (bubCompEnd >= bubCompStart && bubSubjEnd >= bubSubjStart) {
+    xlChartSpecs.push({
+      sheetName: 'Bubble Analysis', type: 'bubble', title: 'Rent vs Unit Size (Bubble = Units)',
+      series: [
+        { name: 'Comps', xValRef: `'Bubble Analysis'!$D$${bubCompStart}:$D$${bubCompEnd}`, yValRef: `'Bubble Analysis'!$E$${bubCompStart}:$E$${bubCompEnd}`, bubbleSizeRef: `'Bubble Analysis'!$F$${bubCompStart}:$F$${bubCompEnd}`, color: '375A7F', alpha: '73' },
+        { name: 'Subject', xValRef: `'Bubble Analysis'!$D$${bubSubjStart}:$D$${bubSubjEnd}`, yValRef: `'Bubble Analysis'!$E$${bubSubjStart}:$E$${bubSubjEnd}`, bubbleSizeRef: `'Bubble Analysis'!$F$${bubSubjStart}:$F$${bubSubjEnd}`, color: '48C4E4', alpha: 'D9' }
+      ],
+      trendOnFirst: true,
+      anchor: { fromCol: 7, fromRow: 3, toCol: 20, toRow: 28 }
+    });
+  }
+
   // ── Download ──
   let buffer = await wb.xlsx.writeBuffer();
   try {
@@ -1684,6 +1820,7 @@ function loadComparison(id) {
 
   document.getElementById('subjectName').value = s.subject.name;
   document.getElementById('subjectYearBuilt').value = s.subject.yearBuilt || '';
+  document.getElementById('subjectOccupancy').value = s.subject.occupancy != null ? s.subject.occupancy : '';
 
   const body = document.getElementById('subjectMixBody');
   body.innerHTML = '';

@@ -245,6 +245,10 @@
               <label>Year Built</label>
               <input type="number" id="subjectYearBuilt" placeholder="e.g. 2024">
             </div>
+            <div class="form-group">
+              <label>Occupancy %</label>
+              <input type="number" id="subjectOccupancy" placeholder="e.g. 94.5" min="0" max="100" step="0.1">
+            </div>
           </div>
           <div style="margin-top:1.15rem;">
             <div class="flex-between">
@@ -538,6 +542,7 @@ function renderPropertyCards() {
   properties.forEach(prop => {
     const wtdRent = prop.totalUnits > 0 ? prop.unitTypes.reduce((s,u) => s + u.marketRent * u.units, 0) / prop.totalUnits : 0;
     const card = document.createElement('div'); card.className = 'property-card';
+    const occVal = prop.occupancy != null ? prop.occupancy : '';
     card.innerHTML = `<div class="name">${esc(prop.name)}</div>
       ${prop.address ? '<div class="address">' + esc(prop.address) + '</div>' : ''}
       <div class="meta">
@@ -545,12 +550,24 @@ function renderPropertyCards() {
         <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>${prop.unitTypes.length} types</span>
         <span class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>$${Math.round(wtdRent).toLocaleString()}</span>
       </div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+        <label style="font-size:0.74rem;color:var(--text-mid);white-space:nowrap;">Occupancy %</label>
+        <input type="number" min="0" max="100" step="0.1" placeholder="e.g. 94.5" value="${occVal}"
+          style="width:90px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;font-family:var(--sans);"
+          oninput="setOccupancy('${prop.id}', this.value)">
+        <span style="font-size:0.74rem;color:var(--text-mid);">%</span>
+      </div>
       <div class="actions"><button class="btn btn-remove" onclick="removeProperty('${prop.id}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Remove</button></div>`;
     container.appendChild(card);
   });
 }
 
 function removeProperty(id) { properties = properties.filter(p => p.id !== id); renderPropertyCards(); }
+
+function setOccupancy(id, val) {
+  const prop = properties.find(p => p.id === id);
+  if (prop) prop.occupancy = val !== '' ? parseFloat(val) : null;
+}
 
 function clearAll() {
   properties = []; subjectProperty = null;
@@ -648,7 +665,8 @@ function applySubject() {
     if (ut && (units > 0 || rent > 0)) unitTypes.push({ unitType: ut, units, sqft, marketRent: rent, rentPerSqft: sqft > 0 ? rent / sqft : null, monthlyRents: {}, monthlyPerSF: {} });
   });
   if (unitTypes.length === 0) { notify('Add at least one unit type with data', 'error'); return; }
-  subjectProperty = { id: 'subject', name, unitTypes, totalUnits: unitTypes.reduce((s,u) => s + u.units, 0), yearBuilt: document.getElementById('subjectYearBuilt').value, monthHeaders: [] };
+  const occInput = document.getElementById('subjectOccupancy').value;
+  subjectProperty = { id: 'subject', name, unitTypes, totalUnits: unitTypes.reduce((s,u) => s + u.units, 0), yearBuilt: document.getElementById('subjectYearBuilt').value, occupancy: occInput !== '' ? parseFloat(occInput) : null, monthHeaders: [] };
   document.getElementById('exportBtn').disabled = false;
   notify('Subject applied — switching to Dashboard', 'success');
   switchTab('dashboard');
@@ -768,7 +786,7 @@ function renderSummaryTable() {
     const wRB = b.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/tB, wSB = b.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/tB;
     return (wSB>0?wRB/wSB:0) - (wSA>0?wRA/wSA:0);
   });
-  head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Total Units</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
+  head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Total Units</th><th>Occupancy</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
   let b = '';
   all.forEach(p => {
     const isS = p.id==='subject', cls = isS?' class="subject-col"':'';
@@ -780,7 +798,9 @@ function renderSummaryTable() {
       : esc(p.name);
     b += `<tr><td${cls} style="font-weight:700;font-family:var(--serif)">${nameHtml}${isS?' <span class="badge badge-subject">Subject</span>':''}</td>`;
     b += `<td${cls}>${p.address||'—'}</td><td${cls}>${p.market||'—'}</td>`;
-    b += `<td${cls}>${p.totalUnits}</td><td${cls}>${p.unitTypes.length}</td>`;
+    const occ = isS ? (subjectProperty.occupancy != null ? subjectProperty.occupancy : null) : p.occupancy;
+    const occDisplay = occ != null ? occ.toFixed(1) + '%' : '—';
+    b += `<td${cls}>${p.totalUnits}</td><td${cls}>${occDisplay}</td><td${cls}>${p.unitTypes.length}</td>`;
     b += `<td${cls}>${fmtN(Math.round(wS))}</td><td${cls}>${fmtC(Math.round(wR))}</td>`;
     b += `<td${cls}>${wS>0?'$'+(wR/wS).toFixed(2):'—'}</td>`;
     b += `<td${cls}>${rents.length?fmtC(Math.min(...rents)):'—'}</td>`;

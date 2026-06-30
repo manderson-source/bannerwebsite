@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     :root {
       --navy: #1b2a4a;
@@ -932,6 +933,213 @@ function xlWriteDataCell(ws, rowNum, col, value, style, numFmt) {
   if (numFmt) c.numFmt = numFmt;
 }
 
+// ── Native Excel chart injection (OOXML via JSZip) ──
+function _xlCol(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function _xmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+const XL_CHART_COLORS = ['1A56DB', 'A8706A', '6A9A7A', 'C9A84C', '7A6A9A', '4C9AC9', '9E9E9E', 'C97A4C'];
+
+function _chartSerXml(ser, idx, chartType) {
+  const color = XL_CHART_COLORS[idx % XL_CHART_COLORS.length];
+  const nameXml = ser.nameRef
+    ? `<c:tx><c:strRef><c:f>${_xmlEsc(ser.nameRef)}</c:f></c:strRef></c:tx>`
+    : (ser.name ? `<c:tx><c:v>${_xmlEsc(ser.name)}</c:v></c:tx>` : '');
+  const spPr = chartType === 'line'
+    ? `<c:spPr><a:ln w="22225"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr>`
+    : `<c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr>`;
+  const marker = chartType === 'line' ? `<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr></c:marker>` : '';
+  return `<c:ser>
+    <c:idx val="${idx}"/>
+    <c:order val="${idx}"/>
+    ${nameXml}
+    ${spPr}
+    ${marker}
+    <c:cat><c:strRef><c:f>${_xmlEsc(ser.catRef)}</c:f></c:strRef></c:cat>
+    <c:val><c:numRef><c:f>${_xmlEsc(ser.valRef)}</c:f></c:numRef></c:val>
+    ${chartType === 'line' ? '<c:smooth val="0"/>' : ''}
+  </c:ser>`;
+}
+
+function _buildChartXml(spec) {
+  const seriesXml = spec.series.map((s, i) => _chartSerXml(s, i, spec.type)).join('\n');
+  const axIds = `<c:axId val="111111111"/><c:axId val="222222222"/>`;
+  const catAx = `<c:catAx>
+    <c:axId val="111111111"/>
+    <c:scaling><c:orientation val="minMax"/></c:scaling>
+    <c:delete val="0"/>
+    <c:axPos val="${spec.type === 'bar' ? 'l' : 'b'}"/>
+    <c:txPr><a:bodyPr rot="0" vert="horz"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>
+    <c:crossAx val="222222222"/>
+  </c:catAx>`;
+  const valAx = `<c:valAx>
+    <c:axId val="222222222"/>
+    <c:scaling><c:orientation val="minMax"/></c:scaling>
+    <c:delete val="0"/>
+    <c:axPos val="${spec.type === 'bar' ? 'b' : 'l'}"/>
+    <c:numFmt formatCode="${spec.numFmt || 'General'}" sourceLinked="0"/>
+    <c:majorGridlines/>
+    <c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>
+    <c:crossAx val="111111111"/>
+  </c:valAx>`;
+
+  let plot;
+  if (spec.type === 'line') {
+    plot = `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${seriesXml}<c:marker val="1"/>${axIds}</c:lineChart>`;
+  } else if (spec.type === 'stackedbar') {
+    plot = `<c:barChart><c:barDir val="col"/><c:grouping val="stacked"/><c:varyColors val="0"/>${seriesXml}<c:overlap val="100"/>${axIds}</c:barChart>`;
+  } else {
+    plot = `<c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>${seriesXml}<c:gapWidth val="60"/>${axIds}</c:barChart>`;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:chart>
+    <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"><a:solidFill><a:srgbClr val="1B2A4A"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1"><a:solidFill><a:srgbClr val="1B2A4A"/></a:solidFill></a:rPr><a:t>${_xmlEsc(spec.title || '')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+    <c:autoTitleDeleted val="0"/>
+    <c:plotArea>
+      <c:layout/>
+      ${plot}
+      ${catAx}
+      ${valAx}
+    </c:plotArea>
+    <c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
+    <c:plotVisOnly val="1"/>
+  </c:chart>
+</c:chartSpace>`;
+}
+
+function _buildDrawingXml(chartIdx, anchor) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <xdr:twoCellAnchor>
+    <xdr:from><xdr:col>${anchor.fromCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchor.fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>${anchor.toCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchor.toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:graphicFrame macro="">
+      <xdr:nvGraphicFramePr>
+        <xdr:cNvPr id="${chartIdx + 2}" name="Chart ${chartIdx + 1}"/>
+        <xdr:cNvGraphicFramePr/>
+      </xdr:nvGraphicFramePr>
+      <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+      <a:graphic>
+        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/>
+        </a:graphicData>
+      </a:graphic>
+    </xdr:graphicFrame>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>`;
+}
+
+const _CT_CHART = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
+const _CT_DRAWING = 'application/vnd.openxmlformats-officedocument.drawing+xml';
+const _REL_DRAWING = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing';
+const _REL_CHART = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart';
+
+async function injectNativeCharts(buffer, chartSpecs) {
+  if (!chartSpecs.length) return buffer;
+  const zip = await JSZip.loadAsync(buffer);
+
+  // Map sheet name -> worksheet xml path, using workbook.xml + workbook.xml.rels
+  const wbXml = await zip.file('xl/workbook.xml').async('string');
+  const wbRelsXml = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const sheetIdToRid = {};
+  [...wbXml.matchAll(/<sheet[^>]*name="([^"]*)"[^>]*r:id="(rId\d+)"/g)].forEach(m => { sheetIdToRid[m[1]] = m[2]; });
+  const ridToTarget = {};
+  [...wbRelsXml.matchAll(/<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]*)"/g)].forEach(m => { ridToTarget[m[1]] = m[2]; });
+  const sheetNameToPath = {};
+  Object.keys(sheetIdToRid).forEach(name => {
+    const target = ridToTarget[sheetIdToRid[name]];
+    if (target) sheetNameToPath[name] = 'xl/' + target.replace(/^\/?xl\//, '').replace(/^\.\//, '');
+  });
+
+  // Content types
+  let ctXml = await zip.file('[Content_Types].xml').async('string');
+  const ctOverrides = [];
+
+  // Group specs by sheet
+  const bySheet = {};
+  chartSpecs.forEach(spec => { (bySheet[spec.sheetName] = bySheet[spec.sheetName] || []).push(spec); });
+
+  let chartCounter = 0;
+  let drawingCounter = 0;
+  for (const sheetName of Object.keys(bySheet)) {
+    const sheetPath = sheetNameToPath[sheetName];
+    if (!sheetPath) continue;
+    const specs = bySheet[sheetName];
+    const chartNums = [];
+
+    for (const spec of specs) {
+      chartCounter++;
+      chartNums.push(chartCounter);
+      const chartXml = _buildChartXml(spec);
+      zip.file(`xl/charts/chart${chartCounter}.xml`, chartXml);
+      ctOverrides.push(`<Override PartName="/xl/charts/chart${chartCounter}.xml" ContentType="${_CT_CHART}"/>`);
+    }
+
+    drawingCounter++;
+    const combinedAnchors = specs.map((spec, i) => {
+      const cNum = chartNums[i];
+      return `<xdr:twoCellAnchor>
+    <xdr:from><xdr:col>${spec.anchor.fromCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${spec.anchor.fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>${spec.anchor.toCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${spec.anchor.toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:graphicFrame macro="">
+      <xdr:nvGraphicFramePr>
+        <xdr:cNvPr id="${i + 2}" name="Chart ${cNum}"/>
+        <xdr:cNvGraphicFramePr/>
+      </xdr:nvGraphicFramePr>
+      <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+      <a:graphic>
+        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${i + 1}"/>
+        </a:graphicData>
+      </a:graphic>
+    </xdr:graphicFrame>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>`;
+    }).join('\n');
+
+    const drawingName = `drawing${drawingCounter}`;
+    zip.file(`xl/drawings/${drawingName}.xml`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${combinedAnchors}</xdr:wsDr>`);
+    ctOverrides.push(`<Override PartName="/xl/drawings/${drawingName}.xml" ContentType="${_CT_DRAWING}"/>`);
+
+    const relsForDrawing = specs.map((spec, i) => `<Relationship Id="rId${i + 1}" Type="${_REL_CHART}" Target="../charts/chart${chartNums[i]}.xml"/>`).join('');
+    zip.file(`xl/drawings/_rels/${drawingName}.xml.rels`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relsForDrawing}</Relationships>`);
+
+    // Sheet rels: add drawing relationship
+    const sheetRelsPath = sheetPath.replace(/^xl\/worksheets\//, 'xl/worksheets/_rels/') + '.rels';
+    let sheetRelsXml = '';
+    const existing = zip.file(sheetRelsPath);
+    if (existing) sheetRelsXml = await existing.async('string');
+    const relId = 'rIdDrawing' + drawingCounter;
+    let newRelXml;
+    if (sheetRelsXml) {
+      newRelXml = sheetRelsXml.replace('</Relationships>', `<Relationship Id="${relId}" Type="${_REL_DRAWING}" Target="../drawings/${drawingName}.xml"/></Relationships>`);
+    } else {
+      newRelXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="${relId}" Type="${_REL_DRAWING}" Target="../drawings/${drawingName}.xml"/></Relationships>`;
+    }
+    zip.file(sheetRelsPath, newRelXml);
+
+    // Sheet xml: add <drawing r:id="..."/> before </worksheet>
+    let sheetXml = await zip.file(sheetPath).async('string');
+    if (!/<drawing /.test(sheetXml)) {
+      sheetXml = sheetXml.replace('</worksheet>', `<drawing r:id="${relId}"/></worksheet>`);
+      zip.file(sheetPath, sheetXml);
+    }
+  }
+
+  ctXml = ctXml.replace('</Types>', ctOverrides.join('') + '</Types>');
+  zip.file('[Content_Types].xml', ctXml);
+
+  return await zip.generateAsync({ type: 'arraybuffer' });
+}
+
 function getWtdRentForMonth(prop, normType, month) {
   const fps = getFloorplansForType(prop, normType);
   let tR = 0, tU = 0;
@@ -973,6 +1181,7 @@ async function exportToExcel() {
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Banner Real Estate Group';
+  const xlChartSpecs = [];
 
   // ── Sheet 1: Summary ──
   const ws1 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: '1B2A4A' } } });
@@ -1054,6 +1263,17 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, avgRow, 8, Math.round(aPSF * 100) / 100, avgSty, '$#,##0.00');
   }
 
+  xlChartSpecs.push({
+    sheetName: 'Summary', type: 'bar', title: 'Avg Rent by Property', numFmt: '$#,##0',
+    series: [{ name: 'Avg Rent', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$G$6:$G$${5 + all.length}` }],
+    anchor: { fromCol: 9, fromRow: 4, toCol: 18, toRow: 4 + Math.max(16, all.length + 4) }
+  });
+  xlChartSpecs.push({
+    sheetName: 'Summary', type: 'bar', title: '$/SF by Property', numFmt: '$#,##0.00',
+    series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$H$6:$H$${5 + all.length}` }],
+    anchor: { fromCol: 19, fromRow: 4, toCol: 28, toRow: 4 + Math.max(16, all.length + 4) }
+  });
+
   // ── Sheet 2: Rent Trend by Bedroom ──
   if (months.length > 0) {
     const ws2 = wb.addWorksheet('Rent Trend by Bedroom', { properties: { tabColor: { argb: '4A6FA5' } } });
@@ -1061,6 +1281,7 @@ async function exportToExcel() {
     ws2.columns = colWidths;
 
     let row = 1;
+    const lastColL2 = _xlCol(1 + months.length);
     BED_TYPES.forEach(bedType => {
       const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
       if (propsWithData.length === 0) return;
@@ -1068,12 +1289,15 @@ async function exportToExcel() {
       const titleC = ws2.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg Rent by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
 
       const headers = ['Property', ...months];
+      const hdrRow2 = row;
       xlWriteHdrRow(ws2, row, headers); row++;
 
+      const series2 = [];
       const subjAgg = getAggregatedForType(subj, bedType);
       if (subjAgg && subjAgg.marketRent > 0) {
         xlWriteDataCell(ws2, row, 1, subj.name + ' (Subject)', { ...xlBoldStyle(XL_SUBJ_BLUE), alignment: { horizontal: 'left' } });
         months.forEach((m, mi) => { xlWriteDataCell(ws2, row, 2 + mi, Math.round(subjAgg.marketRent), xlBoldStyle(XL_SUBJ_BLUE), '$#,##0'); });
+        series2.push({ nameRef: `'Rent Trend by Bedroom'!$A$${row}`, catRef: `'Rent Trend by Bedroom'!$B$${hdrRow2}:$${lastColL2}$${hdrRow2}`, valRef: `'Rent Trend by Bedroom'!$B$${row}:$${lastColL2}$${row}` });
         row++;
       }
 
@@ -1084,8 +1308,17 @@ async function exportToExcel() {
           const v = getWtdRentForMonth(comp, bedType, m);
           xlWriteDataCell(ws2, row, 2 + mi, v ? Math.round(v) : null, xlBodyStyle(fill), '$#,##0');
         });
+        series2.push({ nameRef: `'Rent Trend by Bedroom'!$A$${row}`, catRef: `'Rent Trend by Bedroom'!$B$${hdrRow2}:$${lastColL2}$${hdrRow2}`, valRef: `'Rent Trend by Bedroom'!$B$${row}:$${lastColL2}$${row}` });
         row++;
       });
+
+      if (series2.length > 0) {
+        xlChartSpecs.push({
+          sheetName: 'Rent Trend by Bedroom', type: 'line', title: bedType + ' — Rent Trend', numFmt: '$#,##0',
+          series: series2,
+          anchor: { fromCol: 2 + months.length, fromRow: hdrRow2 - 1, toCol: 11 + months.length, toRow: hdrRow2 - 1 + Math.max(14, series2.length + 4) }
+        });
+      }
       row += 2;
     });
   }
@@ -1097,18 +1330,22 @@ async function exportToExcel() {
     ws3.columns = colWidths;
 
     let row = 1;
+    const lastColL3 = _xlCol(1 + months.length);
     BED_TYPES.forEach(bedType => {
       const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdPsfForMonth(c, bedType, m) !== null); });
       if (propsWithData.length === 0) return;
 
       const titleC = ws3.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg $/SF by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
 
+      const hdrRow3 = row;
       xlWriteHdrRow(ws3, row, ['Property', ...months]); row++;
 
+      const series3 = [];
       const subjAgg = getAggregatedForType(subj, bedType);
       if (subjAgg && subjAgg.rentPerSqft > 0) {
         xlWriteDataCell(ws3, row, 1, subj.name + ' (Subject)', { ...xlBoldStyle(XL_SUBJ_BLUE), alignment: { horizontal: 'left' } });
         months.forEach((m, mi) => { xlWriteDataCell(ws3, row, 2 + mi, Math.round(subjAgg.rentPerSqft * 100) / 100, xlBoldStyle(XL_SUBJ_BLUE), '$#,##0.00'); });
+        series3.push({ nameRef: `'PSF Trend by Bedroom'!$A$${row}`, catRef: `'PSF Trend by Bedroom'!$B$${hdrRow3}:$${lastColL3}$${hdrRow3}`, valRef: `'PSF Trend by Bedroom'!$B$${row}:$${lastColL3}$${row}` });
         row++;
       }
 
@@ -1119,8 +1356,17 @@ async function exportToExcel() {
           const v = getWtdPsfForMonth(comp, bedType, m);
           xlWriteDataCell(ws3, row, 2 + mi, v ? Math.round(v * 100) / 100 : null, xlBodyStyle(fill), '$#,##0.00');
         });
+        series3.push({ nameRef: `'PSF Trend by Bedroom'!$A$${row}`, catRef: `'PSF Trend by Bedroom'!$B$${hdrRow3}:$${lastColL3}$${hdrRow3}`, valRef: `'PSF Trend by Bedroom'!$B$${row}:$${lastColL3}$${row}` });
         row++;
       });
+
+      if (series3.length > 0) {
+        xlChartSpecs.push({
+          sheetName: 'PSF Trend by Bedroom', type: 'line', title: bedType + ' — $/SF Trend', numFmt: '$#,##0.00',
+          series: series3,
+          anchor: { fromCol: 2 + months.length, fromRow: hdrRow3 - 1, toCol: 11 + months.length, toRow: hdrRow3 - 1 + Math.max(14, series3.length + 4) }
+        });
+      }
       row += 2;
     });
   }
@@ -1149,6 +1395,19 @@ async function exportToExcel() {
       xlWriteDataCell(ws4, r, 3 + bi, pct, sty, '0.0%');
     });
   });
+
+  if (BED_TYPES.length > 0) {
+    const mixLastRow = 3 + all.length;
+    xlChartSpecs.push({
+      sheetName: 'Unit Mix Comparison', type: 'stackedbar', title: 'Unit Mix by Property', numFmt: '0%',
+      series: BED_TYPES.map((bt, bi) => ({
+        nameRef: `'Unit Mix Comparison'!$${_xlCol(3 + bi)}$3`,
+        catRef: `'Unit Mix Comparison'!$A$4:$A$${mixLastRow}`,
+        valRef: `'Unit Mix Comparison'!$${_xlCol(3 + bi)}$4:$${_xlCol(3 + bi)}$${mixLastRow}`
+      })),
+      anchor: { fromCol: 3 + BED_TYPES.length + 1, fromRow: 2, toCol: 12 + BED_TYPES.length + 1, toRow: 2 + Math.max(16, all.length + 4) }
+    });
+  }
 
   // ── Sheet 5: Bedroom Comparison Detail ──
   const ws5 = wb.addWorksheet('Bedroom Comparison', { properties: { tabColor: { argb: '5A7DA8' } } });
@@ -1209,6 +1468,13 @@ async function exportToExcel() {
       xlWriteDataCell(ws5, r5, 7, { formula: 'IF(D' + dataStartRow + '=0,"",F' + r5 + '/D' + dataStartRow + ')' }, avgSty, '0.0%');
       r5++;
     }
+
+    xlChartSpecs.push({
+      sheetName: 'Bedroom Comparison', type: 'bar', title: bedType + ' — Wtd Avg Rent', numFmt: '$#,##0',
+      series: [{ name: 'Wtd Avg Rent', catRef: `'Bedroom Comparison'!$A$${dataStartRow}:$A$${r5 - 1}`, valRef: `'Bedroom Comparison'!$D$${dataStartRow}:$D$${r5 - 1}` }],
+      anchor: { fromCol: 8, fromRow: dataStartRow - 3, toCol: 16, toRow: dataStartRow - 3 + Math.max(12, propsWithData.length + 4) }
+    });
+
     r5 += 2;
   });
 
@@ -1237,6 +1503,8 @@ async function exportToExcel() {
       const rentHdrRow = pRow;
       xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
 
+      const rentLastColL = _xlCol(1 + months.length);
+      const rentSeriesRows = [];
       propBedTypes.forEach((bt, bi) => {
         const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
         const sty = xlBodyStyle(fill);
@@ -1249,6 +1517,7 @@ async function exportToExcel() {
         const lastCol = String.fromCharCode(66 + months.length - 1);
         xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + lastCol + pRow + '="",' + firstCol + pRow + '=""),"",(' + lastCol + pRow + '-' + firstCol + pRow + '))' }, sty, '$#,##0');
         xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + lastCol + pRow + '="",' + firstCol + pRow + '="",' + firstCol + pRow + '=0),"",(' + lastCol + pRow + '-' + firstCol + pRow + ')/' + firstCol + pRow + ')' }, sty, '0.0%');
+        rentSeriesRows.push(pRow);
         pRow++;
       });
 
@@ -1264,6 +1533,14 @@ async function exportToExcel() {
       const oLastCol = String.fromCharCode(66 + months.length - 1);
       xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + oLastCol + pRow + '="",' + oFirstCol + pRow + '=""),"",(' + oLastCol + pRow + '-' + oFirstCol + pRow + '))' }, allRentSty, '$#,##0');
       xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + oLastCol + pRow + '="",' + oFirstCol + pRow + '="",' + oFirstCol + pRow + '=0),"",(' + oLastCol + pRow + '-' + oFirstCol + pRow + ')/' + oFirstCol + pRow + ')' }, allRentSty, '0.0%');
+      rentSeriesRows.push(pRow);
+
+      xlChartSpecs.push({
+        sheetName, type: 'line', title: 'Monthly Rent by Unit Type', numFmt: '$#,##0',
+        series: rentSeriesRows.map(r => ({ nameRef: `'${sheetName}'!$A$${r}`, catRef: `'${sheetName}'!$B$${rentHdrRow}:$${rentLastColL}$${rentHdrRow}`, valRef: `'${sheetName}'!$B$${r}:$${rentLastColL}$${r}` })),
+        anchor: { fromCol: 4 + months.length, fromRow: rentHdrRow - 2, toCol: 13 + months.length, toRow: rentHdrRow - 2 + Math.max(14, rentSeriesRows.length + 4) }
+      });
+
       pRow += 3;
 
       // $/SF section
@@ -1273,7 +1550,10 @@ async function exportToExcel() {
       });
       if (psfBedTypes.length > 0) {
         const psfTitle = wsP.getCell(pRow, 1); psfTitle.value = 'Monthly Weighted Avg $/SF'; psfTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; pRow++;
+        const psfHdrRow = pRow;
         xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
+        const psfLastColL = _xlCol(1 + months.length);
+        const psfSeriesRows = [];
 
         psfBedTypes.forEach((bt, bi) => {
           const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
@@ -1286,6 +1566,7 @@ async function exportToExcel() {
           const fc = String.fromCharCode(66), lc = String.fromCharCode(66 + months.length - 1);
           xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + lc + pRow + '="",' + fc + pRow + '=""),"",(' + lc + pRow + '-' + fc + pRow + '))' }, sty, '$#,##0.00');
           xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + lc + pRow + '="",' + fc + pRow + '="",' + fc + pRow + '=0),"",(' + lc + pRow + '-' + fc + pRow + ')/' + fc + pRow + ')' }, sty, '0.0%');
+          psfSeriesRows.push(pRow);
           pRow++;
         });
 
@@ -1298,13 +1579,25 @@ async function exportToExcel() {
         });
         const pfc = String.fromCharCode(66), plc = String.fromCharCode(66 + months.length - 1);
         xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + plc + pRow + '="",' + pfc + pRow + '=""),"",(' + plc + pRow + '-' + pfc + pRow + '))' }, allPsfSty, '$#,##0.00');
+        psfSeriesRows.push(pRow);
         xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + plc + pRow + '="",' + pfc + pRow + '="",' + pfc + pRow + '=0),"",(' + plc + pRow + '-' + pfc + pRow + ')/' + pfc + pRow + ')' }, allPsfSty, '0.0%');
+
+        xlChartSpecs.push({
+          sheetName, type: 'line', title: 'Monthly $/SF by Unit Type', numFmt: '$#,##0.00',
+          series: psfSeriesRows.map(r => ({ nameRef: `'${sheetName}'!$A$${r}`, catRef: `'${sheetName}'!$B$${psfHdrRow}:$${psfLastColL}$${psfHdrRow}`, valRef: `'${sheetName}'!$B$${r}:$${psfLastColL}$${r}` })),
+          anchor: { fromCol: 4 + months.length, fromRow: psfHdrRow - 2, toCol: 13 + months.length, toRow: psfHdrRow - 2 + Math.max(14, psfSeriesRows.length + 4) }
+        });
       }
     });
   }
 
   // ── Download ──
-  const buffer = await wb.xlsx.writeBuffer();
+  let buffer = await wb.xlsx.writeBuffer();
+  try {
+    buffer = await injectNativeCharts(buffer, xlChartSpecs);
+  } catch (err) {
+    console.error('Native chart injection failed, exporting without charts:', err);
+  }
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -763,14 +763,23 @@ function renderCharts() {
     options: { ...defaultOpts, scales: { x: { stacked: true, ticks: { font: { ...chartFont, size: 10 } } }, y: { stacked: true, max: 100, ticks: { callback: v=>v+'%', font: chartFont } } } }
   });
 
-  // Bubble chart: each floorplan is a bubble, x=SF, y=Rent, r=units
+  // Bubble chart: one bubble per bedroom type per property (aggregated)
   const compBubbles = [], subjBubbles = [];
   all.forEach(p => {
+    const byType = {};
     p.unitTypes.forEach(u => {
       if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
-        const pt = { x: u.sqft, y: Math.round(u.marketRent), r: Math.max(4, Math.sqrt(u.units) * 4), _units: u.units, _prop: p.name, _type: u.unitType };
-        if (p.id === 'subject') subjBubbles.push(pt); else compBubbles.push(pt);
+        const nt = normalizeUnitType(u.unitType);
+        if (!byType[nt]) byType[nt] = { totalUnits: 0, wtdSF: 0, wtdRent: 0 };
+        byType[nt].totalUnits += u.units;
+        byType[nt].wtdSF += u.sqft * u.units;
+        byType[nt].wtdRent += u.marketRent * u.units;
       }
+    });
+    Object.keys(byType).forEach(nt => {
+      const g = byType[nt];
+      const pt = { x: Math.round(g.wtdSF / g.totalUnits), y: Math.round(g.wtdRent / g.totalUnits), r: Math.max(4, Math.sqrt(g.totalUnits) * 4), _units: g.totalUnits, _prop: p.name, _type: nt };
+      if (p.id === 'subject') subjBubbles.push(pt); else compBubbles.push(pt);
     });
   });
   // Linear regression on comp data
@@ -1679,40 +1688,49 @@ async function exportToExcel() {
   const wsBub = wb.addWorksheet('Bubble Analysis', { properties: { tabColor: { argb: '48C4E4' } } });
   wsBub.columns = [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 14 }, { width: 16 }, { width: 12 }];
   const bubTitle = wsBub.getCell('A1'); bubTitle.value = 'Rent vs Unit Size — Bubble Analysis'; bubTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
-  const bubSub = wsBub.getCell('A2'); bubSub.value = 'Each row is one floorplan. Bubble size = number of units.'; bubSub.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
-  xlWriteHdrRow(wsBub, 4, ['Series', 'Property', 'Unit Type', 'Avg SF', 'Avg Rent', 'Units']);
+  const bubSub = wsBub.getCell('A2'); bubSub.value = 'Each row is one bedroom type per property (aggregated). Bubble size = number of units.'; bubSub.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+  xlWriteHdrRow(wsBub, 4, ['Series', 'Property', 'Bedroom Type', 'Avg SF', 'Avg Rent', 'Units']);
   let bubRow = 5, bubCompStart = 0, bubCompEnd = 0, bubSubjStart = 0, bubSubjEnd = 0;
+  function _aggByType(prop) {
+    const byType = {};
+    prop.unitTypes.forEach(u => {
+      if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
+        const nt = normalizeUnitType(u.unitType);
+        if (!byType[nt]) byType[nt] = { totalUnits: 0, wtdSF: 0, wtdRent: 0 };
+        byType[nt].totalUnits += u.units;
+        byType[nt].wtdSF += u.sqft * u.units;
+        byType[nt].wtdRent += u.marketRent * u.units;
+      }
+    });
+    return Object.keys(byType).map(nt => ({ type: nt, units: byType[nt].totalUnits, sf: Math.round(byType[nt].wtdSF / byType[nt].totalUnits), rent: Math.round(byType[nt].wtdRent / byType[nt].totalUnits) }));
+  }
   // Comp rows first
   bubCompStart = bubRow;
   comps.forEach(p => {
-    p.unitTypes.forEach(u => {
-      if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
-        const fill = (bubRow % 2 === 0) ? XL_ALT_GRAY : null;
-        const sty = xlBodyStyle(fill); const styL = { ...sty, alignment: { horizontal: 'left' } };
-        xlWriteDataCell(wsBub, bubRow, 1, 'Comp', styL);
-        xlWriteDataCell(wsBub, bubRow, 2, p.name, styL);
-        xlWriteDataCell(wsBub, bubRow, 3, u.unitType, styL);
-        xlWriteDataCell(wsBub, bubRow, 4, u.sqft, sty, '#,##0');
-        xlWriteDataCell(wsBub, bubRow, 5, Math.round(u.marketRent), sty, '$#,##0');
-        xlWriteDataCell(wsBub, bubRow, 6, u.units, sty, '#,##0');
-        bubRow++;
-      }
+    _aggByType(p).forEach(g => {
+      const fill = (bubRow % 2 === 0) ? XL_ALT_GRAY : null;
+      const sty = xlBodyStyle(fill); const styL = { ...sty, alignment: { horizontal: 'left' } };
+      xlWriteDataCell(wsBub, bubRow, 1, 'Comp', styL);
+      xlWriteDataCell(wsBub, bubRow, 2, p.name, styL);
+      xlWriteDataCell(wsBub, bubRow, 3, g.type, styL);
+      xlWriteDataCell(wsBub, bubRow, 4, g.sf, sty, '#,##0');
+      xlWriteDataCell(wsBub, bubRow, 5, g.rent, sty, '$#,##0');
+      xlWriteDataCell(wsBub, bubRow, 6, g.units, sty, '#,##0');
+      bubRow++;
     });
   });
   bubCompEnd = bubRow - 1;
   // Subject rows
   bubSubjStart = bubRow;
-  subj.unitTypes.forEach(u => {
-    if (u.sqft > 0 && u.marketRent > 0 && u.units > 0) {
-      const sty = xlBoldStyle(XL_SUBJ_BLUE); const styL = { ...sty, alignment: { horizontal: 'left' } };
-      xlWriteDataCell(wsBub, bubRow, 1, 'Subject', styL);
-      xlWriteDataCell(wsBub, bubRow, 2, subj.name, styL);
-      xlWriteDataCell(wsBub, bubRow, 3, u.unitType, styL);
-      xlWriteDataCell(wsBub, bubRow, 4, u.sqft, sty, '#,##0');
-      xlWriteDataCell(wsBub, bubRow, 5, Math.round(u.marketRent), sty, '$#,##0');
-      xlWriteDataCell(wsBub, bubRow, 6, u.units, sty, '#,##0');
+  _aggByType(subj).forEach(g => {
+    const sty = xlBoldStyle(XL_SUBJ_BLUE); const styL = { ...sty, alignment: { horizontal: 'left' } };
+    xlWriteDataCell(wsBub, bubRow, 1, 'Subject', styL);
+    xlWriteDataCell(wsBub, bubRow, 2, subj.name, styL);
+    xlWriteDataCell(wsBub, bubRow, 3, g.type, styL);
+    xlWriteDataCell(wsBub, bubRow, 4, g.sf, sty, '#,##0');
+    xlWriteDataCell(wsBub, bubRow, 5, g.rent, sty, '$#,##0');
+    xlWriteDataCell(wsBub, bubRow, 6, g.units, sty, '#,##0');
       bubRow++;
-    }
   });
   bubSubjEnd = bubRow - 1;
   if (bubCompEnd >= bubCompStart && bubSubjEnd >= bubSubjStart) {

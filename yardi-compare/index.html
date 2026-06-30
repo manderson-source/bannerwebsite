@@ -1689,10 +1689,10 @@ function loadComparison(id) {
   body.innerHTML = '';
   s.subject.unitTypes.forEach(u => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}"></td>
-      <td><input type="number" value="${u.units}" min="0" oninput="calcSubjectRow(this)"></td>
-      <td><input type="number" value="${u.sqft}" min="0" oninput="calcSubjectRow(this)"></td>
-      <td><input type="number" value="${u.marketRent}" min="0" oninput="calcSubjectRow(this)"></td>
+    tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.units}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.sqft}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.marketRent}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
       <td class="calc-cell">${u.rentPerSqft ? '$'+u.rentPerSqft.toFixed(2) : '—'}</td><td class="calc-cell">—</td>
       <td><button class="btn btn-remove" style="padding:0.15rem 0.4rem;font-size:0.7rem;" onclick="this.closest('tr').remove();updateSubjectTotals();">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

@@ -356,7 +356,7 @@
 
 <script>
 // ── Muted color palette ──
-const SUBJECT_COLOR = '#5a7da8';
+const SUBJECT_COLOR = '#1A56DB';
 const COMP_COLORS = ['#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a9a96','#a8856a','#9a7a7a','#7a9a7a','#b89a6a','#8a8a8a'];
 const UNIT_TYPE_COLORS = ['#5a7da8','#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a9a96','#a8856a','#9a7a7a'];
 
@@ -574,13 +574,43 @@ function initSubjectRows() {
 }
 initSubjectRows();
 
+function mixKeyNav(e) {
+  const input = e.target;
+  const td = input.closest('td');
+  const tr = td.closest('tr');
+  const inputs = Array.from(tr.querySelectorAll('input'));
+  const colIdx = inputs.indexOf(input);
+
+  if (e.key === 'Tab' && !e.shiftKey) {
+    const next = inputs[colIdx + 1];
+    if (next) { e.preventDefault(); next.focus(); next.select(); }
+  } else if (e.key === 'Tab' && e.shiftKey) {
+    const prev = inputs[colIdx - 1];
+    if (prev) { e.preventDefault(); prev.focus(); prev.select(); }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const nextRow = tr.nextElementSibling;
+    if (nextRow) {
+      const nextInputs = nextRow.querySelectorAll('input');
+      if (nextInputs[colIdx]) { nextInputs[colIdx].focus(); nextInputs[colIdx].select(); }
+    } else {
+      addSubjectRow();
+      const newRow = tr.nextElementSibling;
+      if (newRow) {
+        const newInputs = newRow.querySelectorAll('input');
+        if (newInputs[colIdx]) { newInputs[colIdx].focus(); newInputs[colIdx].select(); }
+      }
+    }
+  }
+}
+
 function addSubjectRow(defaultType) {
   const body = document.getElementById('subjectMixBody');
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td><input type="text" placeholder="e.g. 1 BR" value="${defaultType || ''}"></td>
-    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)"></td>
-    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)"></td>
-    <td><input type="number" placeholder="$0" min="0" oninput="calcSubjectRow(this)"></td>
+  tr.innerHTML = `<td><input type="text" placeholder="e.g. 1 BR" value="${defaultType || ''}" onkeydown="mixKeyNav(event)"></td>
+    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+    <td><input type="number" placeholder="0" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+    <td><input type="number" placeholder="$0" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
     <td class="calc-cell">—</td><td class="calc-cell">—</td>
     <td><button class="btn btn-remove" style="padding:0.15rem 0.4rem;font-size:0.7rem;" onclick="this.closest('tr').remove();updateSubjectTotals();">
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -656,7 +686,8 @@ function renderCharts() {
   destroyCharts();
   const all = getAllProperties();
   const labels = all.map(p => p.id === 'subject' ? p.name + ' (Subject)' : p.name);
-  const colorMap = all.map((p,i) => p.id === 'subject' ? SUBJECT_COLOR : COMP_COLORS[(i-1)%COMP_COLORS.length]);
+  const COMP_GRAY = '#9E9E9E';
+  const colorMap = all.map((p) => p.id === 'subject' ? SUBJECT_COLOR : COMP_GRAY);
   const normTypes = getNormalizedBedroomTypes(all);
   const chartFont = { family: "Calibri, 'Segoe UI', sans-serif" };
   const defaultOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, ...chartFont } } } } };
@@ -664,30 +695,34 @@ function renderCharts() {
   // Aggregated data per normalized type per property
   function aggData(prop, nt, field) { const a = getAggregatedForType(prop, nt); return a ? a[field] : null; }
 
+  const subjBar = (pi) => all[pi].id === 'subject';
+  const barBg = (pi) => colorMap[pi];
+  const barBorder = (pi) => subjBar(pi) ? 3 : 1;
+
   charts.rentByType = new Chart(document.getElementById('chartRentByType'), {
-    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'marketRent')), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'marketRent')), backgroundColor: barBg(pi), borderColor: colorMap[pi], borderWidth: barBorder(pi), borderRadius: 2, order: subjBar(pi) ? 0 : 1 })) },
     options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } }, x: { ticks: { font: chartFont } } } }
   });
 
   charts.rentPerSF = new Chart(document.getElementById('chartRentPerSF'), {
-    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => { const a = getAggregatedForType(p,nt); return a && a.rentPerSqft ? Math.round(a.rentPerSqft*100)/100 : null; }), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => { const a = getAggregatedForType(p,nt); return a && a.rentPerSqft ? Math.round(a.rentPerSqft*100)/100 : null; }), backgroundColor: barBg(pi), borderColor: colorMap[pi], borderWidth: barBorder(pi), borderRadius: 2, order: subjBar(pi) ? 0 : 1 })) },
     options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>'$'+v.toFixed(2), font: chartFont } }, x: { ticks: { font: chartFont } } } }
   });
 
   charts.unitCount = new Chart(document.getElementById('chartUnitCount'), {
-    type: 'bar', data: { labels: labels, datasets: [{ label: 'Total Units', data: all.map(p=>p.totalUnits), backgroundColor: colorMap.map(c=>c+'99'), borderColor: colorMap, borderWidth: 1, borderRadius: 2 }] },
+    type: 'bar', data: { labels: labels, datasets: [{ label: 'Total Units', data: all.map(p=>p.totalUnits), backgroundColor: colorMap, borderColor: colorMap.map((c,i)=> subjBar(i) ? SUBJECT_COLOR : '#757575'), borderWidth: all.map((p)=> p.id==='subject' ? 3 : 1), borderRadius: 2 }] },
     options: { indexAxis: 'y', ...defaultOpts, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { font: chartFont } }, y: { ticks: { font: chartFont } } } }
   });
 
   charts.sqftComp = new Chart(document.getElementById('chartSqftComp'), {
-    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'sqft')), backgroundColor: colorMap[pi]+'99', borderColor: colorMap[pi], borderWidth: 1, borderRadius: 2 })) },
+    type: 'bar', data: { labels: normTypes, datasets: all.map((p,pi) => ({ label: labels[pi], data: normTypes.map(nt => aggData(p,nt,'sqft')), backgroundColor: barBg(pi), borderColor: colorMap[pi], borderWidth: barBorder(pi), borderRadius: 2, order: subjBar(pi) ? 0 : 1 })) },
     options: { ...defaultOpts, scales: { y: { beginAtZero: true, ticks: { callback: v=>v.toLocaleString()+' SF', font: chartFont } }, x: { ticks: { font: chartFont } } } }
   });
 
   const subj = subjectProperty, sRent = subj.totalUnits>0 ? subj.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/subj.totalUnits : 0;
   const diffs = properties.map(p => { const t=p.totalUnits||1; return p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t - sRent; });
   charts.rentDiff = new Chart(document.getElementById('chartRentDiff'), {
-    type: 'bar', data: { labels: properties.map(p=>p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d=>d>=0?'rgba(46,125,79,0.5)':'rgba(185,74,72,0.5)'), borderColor: diffs.map(d=>d>=0?'#2e7d4f':'#b94a48'), borderWidth: 1, borderRadius: 2 }] },
+    type: 'bar', data: { labels: properties.map(p=>p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d=>d>=0?'#4CAF50':'#E53935'), borderColor: diffs.map(d=>d>=0?'#388E3C':'#C62828'), borderWidth: 1, borderRadius: 2 }] },
     options: { ...defaultOpts, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v=>(v>=0?'+$':'-$')+Math.abs(v).toLocaleString(), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
   });
 
@@ -698,7 +733,7 @@ function renderCharts() {
 
   const scatterData = all.map(p => { const t=p.totalUnits||1; return { x: Math.round(p.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/t), y: Math.round(p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t) }; });
   charts.scatter = new Chart(document.getElementById('chartScatter'), {
-    type: 'scatter', data: { datasets: all.map((p,pi) => ({ label: labels[pi], data: [scatterData[pi]], backgroundColor: colorMap[pi], borderColor: colorMap[pi], pointRadius: p.id==='subject'?10:7, pointStyle: p.id==='subject'?'star':'circle' })) },
+    type: 'scatter', data: { datasets: all.map((p,pi) => ({ label: labels[pi], data: [scatterData[pi]], backgroundColor: colorMap[pi], borderColor: subjBar(pi) ? SUBJECT_COLOR : '#757575', borderWidth: p.id==='subject'?3:1, pointRadius: p.id==='subject'?12:7, pointStyle: p.id==='subject'?'star':'circle' })) },
     options: { ...defaultOpts, plugins: { ...defaultOpts.plugins, tooltip: { callbacks: { label: ctx => ctx.dataset.label+': '+ctx.raw.x.toLocaleString()+' SF, $'+ctx.raw.y.toLocaleString() } } }, scales: { x: { title: { display: true, text: 'Weighted Avg SF', font: chartFont }, ticks: { font: chartFont } }, y: { title: { display: true, text: 'Weighted Avg Rent ($)', font: chartFont }, ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } } } }
   });
 
@@ -726,13 +761,24 @@ function renderTables() {
 function renderSummaryTable() {
   const head = document.getElementById('summaryHead'), body = document.getElementById('summaryBody');
   const all = getAllProperties();
+  // Sort by $/SF descending
+  all.sort((a, b) => {
+    const tA = a.totalUnits||1, tB = b.totalUnits||1;
+    const wRA = a.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/tA, wSA = a.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/tA;
+    const wRB = b.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/tB, wSB = b.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/tB;
+    return (wSB>0?wRB/wSB:0) - (wSA>0?wRA/wSA:0);
+  });
   head.innerHTML = '<tr><th>Property</th><th>Address</th><th>Market</th><th>Total Units</th><th>Floorplans</th><th>Wtd Avg SF</th><th>Wtd Avg Rent</th><th>Wtd $/SF</th><th>Min Rent</th><th>Max Rent</th></tr>';
   let b = '';
   all.forEach(p => {
     const isS = p.id==='subject', cls = isS?' class="subject-col"':'';
     const t=p.totalUnits||1, wR=p.unitTypes.reduce((a,u)=>a+u.marketRent*u.units,0)/t, wS=p.unitTypes.reduce((a,u)=>a+u.sqft*u.units,0)/t;
     const rents=p.unitTypes.filter(u=>u.marketRent>0).map(u=>u.marketRent);
-    b += `<tr><td${cls} style="font-weight:700;font-family:var(--serif)">${esc(p.name)}${isS?' <span class="badge badge-subject">Subject</span>':''}</td>`;
+    const mapsUrl = p.address ? 'https://www.google.com/maps/search/' + encodeURIComponent(p.address) : '';
+    const nameHtml = mapsUrl
+      ? `<a href="${mapsUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:2px">${esc(p.name)}</a>`
+      : esc(p.name);
+    b += `<tr><td${cls} style="font-weight:700;font-family:var(--serif)">${nameHtml}${isS?' <span class="badge badge-subject">Subject</span>':''}</td>`;
     b += `<td${cls}>${p.address||'—'}</td><td${cls}>${p.market||'—'}</td>`;
     b += `<td${cls}>${p.totalUnits}</td><td${cls}>${p.unitTypes.length}</td>`;
     b += `<td${cls}>${fmtN(Math.round(wS))}</td><td${cls}>${fmtC(Math.round(wR))}</td>`;
@@ -773,39 +819,36 @@ function renderUnitTypeTables() {
 
     const tbody = document.createElement('tbody');
     const subjAgg = getAggregatedForType(subj, normType);
-    const subjRent = subjAgg ? subjAgg.marketRent : null;
+    const subjPSF = subjAgg ? subjAgg.rentPerSqft : null;
 
-    if (subjAgg) {
-      const tr = document.createElement('tr');
-      const psf = subjAgg.rentPerSqft ? '$' + subjAgg.rentPerSqft.toFixed(2) : '—';
-      tr.innerHTML = `<td class="prop-name subject-col">${esc(subj.name)} <span class="badge badge-subject">Subject</span></td>
-        <td class="subject-col">${subjAgg.units}</td>
-        <td class="subject-col">${fmtN(subjAgg.sqft)}</td>
-        <td class="subject-col">${fmtC(subjAgg.marketRent)}</td>
-        <td class="subject-col">${psf}</td>
-        <td class="subject-col">—</td><td class="subject-col">—</td>`;
-      tbody.appendChild(tr);
-    }
+    // Build sorted list of all properties with data for this type, sorted by $/SF desc
+    const sortedProps = all.filter(p => getAggregatedForType(p, normType) !== null)
+      .sort((a, b) => {
+        const aggA = getAggregatedForType(a, normType), aggB = getAggregatedForType(b, normType);
+        return (aggB.rentPerSqft || 0) - (aggA.rentPerSqft || 0);
+      });
 
-    properties.forEach(comp => {
-      const agg = getAggregatedForType(comp, normType);
-      if (!agg) return;
+    sortedProps.forEach(p => {
+      const agg = getAggregatedForType(p, normType);
+      const isS = p.id === 'subject';
       const tr = document.createElement('tr');
       const psf = agg.rentPerSqft ? '$' + agg.rentPerSqft.toFixed(2) : '—';
       let diffCell = '—', diffPctCell = '—';
-      if (subjRent && agg.marketRent) {
-        const d = agg.marketRent - subjRent;
-        const pct = (d / subjRent * 100).toFixed(1);
+      if (!isS && subjPSF && agg.rentPerSqft) {
+        const d = agg.rentPerSqft - subjPSF;
+        const pct = (d / subjPSF * 100).toFixed(1);
         const cls = d >= 0 ? 'diff-positive' : 'diff-negative';
-        diffCell = `<span class="${cls}">${d>=0?'+':''}${fmtC(Math.round(d))}</span>`;
+        diffCell = `<span class="${cls}">${d>=0?'+':''}$${Math.abs(d).toFixed(2)}</span>`;
         diffPctCell = `<span class="${cls}">${d>=0?'+':''}${pct}%</span>`;
       }
-      tr.innerHTML = `<td class="prop-name">${esc(comp.name)}</td>
-        <td>${agg.units}</td>
-        <td>${fmtN(agg.sqft)}</td>
-        <td>${fmtC(agg.marketRent)}</td>
-        <td>${psf}</td>
-        <td>${diffCell}</td><td>${diffPctCell}</td>`;
+      const cls = isS ? ' class="subject-col"' : '';
+      const nameLabel = isS ? esc(p.name) + ' <span class="badge badge-subject">Subject</span>' : esc(p.name);
+      tr.innerHTML = `<td class="prop-name${isS?' subject-col':''}">${nameLabel}</td>
+        <td${cls}>${agg.units}</td>
+        <td${cls}>${fmtN(agg.sqft)}</td>
+        <td${cls}>${fmtC(agg.marketRent)}</td>
+        <td${cls}>${psf}</td>
+        <td${cls}>${diffCell}</td><td${cls}>${diffPctCell}</td>`;
       tbody.appendChild(tr);
     });
 
@@ -818,11 +861,11 @@ function renderUnitTypeTables() {
       const tr = document.createElement('tr');
       tr.className = 'totals-row';
       let diffCell = '—', diffPctCell = '—';
-      if (subjRent && avgRent) {
-        const d = avgRent - subjRent;
-        const pct = (d / subjRent * 100).toFixed(1);
+      if (subjPSF && avgPSF) {
+        const d = avgPSF - subjPSF;
+        const pct = (d / subjPSF * 100).toFixed(1);
         const cls = d >= 0 ? 'diff-positive' : 'diff-negative';
-        diffCell = `<span class="${cls}">${d>=0?'+':''}${fmtC(Math.round(d))}</span>`;
+        diffCell = `<span class="${cls}">${d>=0?'+':''}$${Math.abs(d).toFixed(2)}</span>`;
         diffPctCell = `<span class="${cls}">${d>=0?'+':''}${pct}%</span>`;
       }
       tr.innerHTML = `<td class="prop-name">COMP AVERAGE</td>
@@ -1087,151 +1130,155 @@ async function exportToExcel() {
     });
   });
 
-  // ── Sheet 5: Dashboard Charts ──
-  const wsDash = wb.addWorksheet('Dashboard Charts', { properties: { tabColor: { argb: '5A7DA8' } } });
-  wsDash.columns = Array(12).fill({ width: 10 });
+  // ── Sheet 5: Bedroom Comparison Detail ──
+  const ws5 = wb.addWorksheet('Bedroom Comparison', { properties: { tabColor: { argb: '5A7DA8' } } });
+  ws5.columns = [{ width: 30 }, { width: 10 }, { width: 12 }, { width: 16 }, { width: 12 }, { width: 16 }, { width: 16 }];
 
-  const chartLabels = all.map(p => p.id === 'subject' ? p.name + ' (Subject)' : p.name);
-  const chartColors = all.map((p, i) => p.id === 'subject' ? SUBJECT_COLOR : COMP_COLORS[(i - 1) % COMP_COLORS.length]);
-  const chartFont = { family: "Calibri, sans-serif" };
-  const defaultChartOpts = { responsive: false, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, ...chartFont } } } }, backgroundColor: '#ffffff' };
-  function aggDataX(prop, nt, field) { const a = getAggregatedForType(prop, nt); return a ? a[field] : null; }
+  const ws5Title = ws5.getCell('A1'); ws5Title.value = 'Rent & SF Comparison by Bedroom Type'; ws5Title.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
+  const ws5Date = ws5.getCell('A2'); ws5Date.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); ws5Date.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
 
-  const CW = 700, CH = 360;
-  let dashRow = 1;
+  let r5 = 4;
+  BED_TYPES.forEach(bedType => {
+    const propsWithData = all.filter(p => getAggregatedForType(p, bedType));
+    if (propsWithData.length === 0) return;
 
-  const dashTitle = wsDash.getCell('A1'); dashTitle.value = 'Dashboard Charts'; dashTitle.font = { name: 'Arial', size: 16, bold: true, color: XL_NAVY }; dashRow = 3;
+    const sec = ws5.getCell(r5, 1); sec.value = bedType; sec.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; r5++;
 
-  // Chart 1: Market Rent by Bedroom Type
-  try {
-    const img1 = renderChartToBase64({
-      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => aggDataX(p, nt, 'marketRent')), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Market Rent by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } } } }
-    }, CW, CH);
-    const imgId1 = wb.addImage({ base64: img1, extension: 'png' });
-    wsDash.addImage(imgId1, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+    xlWriteHdrRow(ws5, r5, ['Property', 'Units', 'Avg SF', 'Wtd Avg Rent', '$/SF', 'Diff vs Subject ($)', 'Diff vs Subject (%)']); r5++;
 
-  // Chart 2: Rent Per SF by Bedroom Type
-  try {
-    const img2 = renderChartToBase64({
-      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => { const a = getAggregatedForType(p, nt); return a && a.rentPerSqft ? Math.round(a.rentPerSqft * 100) / 100 : null; }), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: '$/SF by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(2) } } } }
-    }, CW, CH);
-    const imgId2 = wb.addImage({ base64: img2, extension: 'png' });
-    wsDash.addImage(imgId2, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+    const subjAgg = getAggregatedForType(subj, bedType);
+    const subjRent = subjAgg ? subjAgg.marketRent : 0;
+    const dataStartRow = r5;
 
-  // Chart 3: Unit Count
-  try {
-    const img3 = renderChartToBase64({
-      type: 'bar', data: { labels: chartLabels, datasets: [{ label: 'Total Units', data: all.map(p => p.totalUnits), backgroundColor: chartColors.map(c => c + '99'), borderColor: chartColors, borderWidth: 1, borderRadius: 2 }] },
-      options: { indexAxis: 'y', ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false }, title: { display: true, text: 'Total Units by Property', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { beginAtZero: true } } }
-    }, CW, CH);
-    const imgId3 = wb.addImage({ base64: img3, extension: 'png' });
-    wsDash.addImage(imgId3, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+    propsWithData.forEach((p, pi) => {
+      const isS = p.id === 'subject';
+      const agg = getAggregatedForType(p, bedType);
+      const fill = isS ? XL_SUBJ_BLUE : (pi % 2 === 0 ? XL_ALT_GRAY : null);
+      const sty = isS ? xlBoldStyle(fill) : xlBodyStyle(fill);
+      const styL = { ...sty, alignment: { horizontal: 'left' } };
 
-  // Chart 4: Avg SF by Bedroom Type
-  try {
-    const img4 = renderChartToBase64({
-      type: 'bar', data: { labels: BED_TYPES, datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: BED_TYPES.map(nt => aggDataX(p, nt, 'sqft')), backgroundColor: chartColors[pi] + '99', borderColor: chartColors[pi], borderWidth: 1, borderRadius: 2 })) },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Avg SF by Bedroom Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() + ' SF' } } } }
-    }, CW, CH);
-    const imgId4 = wb.addImage({ base64: img4, extension: 'png' });
-    wsDash.addImage(imgId4, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+      xlWriteDataCell(ws5, r5, 1, p.name + (isS ? ' (Subject)' : ''), styL);
+      xlWriteDataCell(ws5, r5, 2, agg.units, sty, '#,##0');
+      xlWriteDataCell(ws5, r5, 3, Math.round(agg.sqft), sty, '#,##0');
+      xlWriteDataCell(ws5, r5, 4, Math.round(agg.marketRent), sty, '$#,##0');
+      xlWriteDataCell(ws5, r5, 5, Math.round(agg.rentPerSqft * 100) / 100, sty, '$#,##0.00');
 
-  // Chart 5: Rent Diff vs Subject
-  try {
-    const sRent = subj.totalUnits > 0 ? subj.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / subj.totalUnits : 0;
-    const diffs = comps.map(p => { const t = p.totalUnits || 1; return p.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / t - sRent; });
-    const img5 = renderChartToBase64({
-      type: 'bar', data: { labels: comps.map(p => p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d => d >= 0 ? 'rgba(46,125,79,0.5)' : 'rgba(185,74,72,0.5)'), borderColor: diffs.map(d => d >= 0 ? '#2e7d4f' : '#b94a48'), borderWidth: 1, borderRadius: 2 }] },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false }, title: { display: true, text: 'Rent Premium/Discount vs Subject', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toLocaleString() } } } }
-    }, CW, CH);
-    const imgId5 = wb.addImage({ base64: img5, extension: 'png' });
-    wsDash.addImage(imgId5, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+      if (isS) {
+        xlWriteDataCell(ws5, r5, 6, '—', sty);
+        xlWriteDataCell(ws5, r5, 7, '—', sty);
+      } else {
+        const subjRentCell = 'D' + dataStartRow;
+        xlWriteDataCell(ws5, r5, 6, { formula: 'D' + r5 + '-' + subjRentCell }, sty, '$#,##0');
+        xlWriteDataCell(ws5, r5, 7, { formula: 'IF(' + subjRentCell + '=0,"",F' + r5 + '/' + subjRentCell + ')' }, sty, '0.0%');
+      }
+      r5++;
+    });
 
-  // Chart 6: Unit Mix
-  try {
-    const img6 = renderChartToBase64({
-      type: 'bar', data: { labels: chartLabels, datasets: BED_TYPES.map((nt, ni) => ({ label: nt, data: all.map(p => { const a = getAggregatedForType(p, nt); return a ? (a.units / (p.totalUnits || 1) * 100) : 0; }), backgroundColor: UNIT_TYPE_COLORS[ni % UNIT_TYPE_COLORS.length] + '88', borderColor: UNIT_TYPE_COLORS[ni % UNIT_TYPE_COLORS.length], borderWidth: 1 })) },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Unit Mix Distribution (%)', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { stacked: true }, y: { stacked: true, max: 100, ticks: { callback: v => v + '%' } } } }
-    }, CW, CH);
-    const imgId6 = wb.addImage({ base64: img6, extension: 'png' });
-    wsDash.addImage(imgId6, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
+    const compDataRows = [];
+    for (let cr = dataStartRow + 1; cr < r5; cr++) compDataRows.push(cr);
+    if (compDataRows.length > 0) {
+      const avgFill = XL_AVG_TAN;
+      const avgSty = xlBoldStyle(avgFill);
+      const avgStyL = { ...avgSty, alignment: { horizontal: 'left' } };
+      xlWriteDataCell(ws5, r5, 1, 'COMP AVERAGE', avgStyL);
+      xlWriteDataCell(ws5, r5, 2, { formula: 'ROUND(AVERAGE(' + compDataRows.map(cr => 'B' + cr).join(',') + '),0)' }, avgSty, '#,##0');
+      xlWriteDataCell(ws5, r5, 3, { formula: 'ROUND(AVERAGE(' + compDataRows.map(cr => 'C' + cr).join(',') + '),0)' }, avgSty, '#,##0');
+      xlWriteDataCell(ws5, r5, 4, { formula: 'ROUND(AVERAGE(' + compDataRows.map(cr => 'D' + cr).join(',') + '),0)' }, avgSty, '$#,##0');
+      xlWriteDataCell(ws5, r5, 5, { formula: 'ROUND(AVERAGE(' + compDataRows.map(cr => 'E' + cr).join(',') + '),2)' }, avgSty, '$#,##0.00');
+      xlWriteDataCell(ws5, r5, 6, { formula: 'D' + r5 + '-D' + dataStartRow }, avgSty, '$#,##0');
+      xlWriteDataCell(ws5, r5, 7, { formula: 'IF(D' + dataStartRow + '=0,"",F' + r5 + '/D' + dataStartRow + ')' }, avgSty, '0.0%');
+      r5++;
+    }
+    r5 += 2;
+  });
 
-  // Chart 7: SF vs Rent Scatter
-  try {
-    const scatterData = all.map(p => { const t = p.totalUnits || 1; return { x: Math.round(p.unitTypes.reduce((s, u) => s + u.sqft * u.units, 0) / t), y: Math.round(p.unitTypes.reduce((s, u) => s + u.marketRent * u.units, 0) / t) }; });
-    const img7 = renderChartToBase64({
-      type: 'scatter', data: { datasets: all.map((p, pi) => ({ label: chartLabels[pi], data: [scatterData[pi]], backgroundColor: chartColors[pi], borderColor: chartColors[pi], pointRadius: p.id === 'subject' ? 10 : 7, pointStyle: p.id === 'subject' ? 'star' : 'circle' })) },
-      options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Rent vs SF (Weighted Avg)', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { x: { title: { display: true, text: 'Weighted Avg SF' } }, y: { title: { display: true, text: 'Weighted Avg Rent ($)' }, ticks: { callback: v => '$' + v.toLocaleString() } } } }
-    }, CW, CH);
-    const imgId7 = wb.addImage({ base64: img7, extension: 'png' });
-    wsDash.addImage(imgId7, { tl: { col: 0, row: dashRow }, ext: { width: CW, height: CH } });
-    dashRow += Math.ceil(CH / 20) + 2;
-  } catch(e) { console.warn('Chart render failed:', e); }
-
-  // ── Sheet 6: Rent Trends by Property ──
+  // ── Sheet 6: Per-Property Rent Trends ──
   if (months.length > 0) {
-    const wsT = wb.addWorksheet('Rent Trends by Property', { properties: { tabColor: { argb: 'A8706A' } } });
-    wsT.columns = Array(12).fill({ width: 10 });
-    let tRow = 1;
-    const tTitle = wsT.getCell('A1'); tTitle.value = 'Monthly Rent Trends by Property'; tTitle.font = { name: 'Arial', size: 16, bold: true, color: XL_NAVY }; tRow = 3;
+    const trendComps = comps.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
 
-    const trendAll = comps.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
-
-    trendAll.forEach(prop => {
+    trendComps.forEach(prop => {
       const propBedTypes = BED_TYPES.filter(bt => {
         const fps = getFloorplansForType(prop, bt);
         return fps.length > 0 && months.some(m => getWtdRentForMonth(prop, bt, m) !== null);
       });
       if (propBedTypes.length === 0) return;
 
-      // Rent chart for this property
-      try {
-        const datasets = propBedTypes.map((bt, bi) => {
-          const data = months.map(m => { const v = getWtdRentForMonth(prop, bt, m); return v ? Math.round(v) : null; });
-          return { label: bt, data, borderColor: UNIT_TYPE_COLORS[bi % UNIT_TYPE_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
-        });
-        const imgP = renderChartToBase64({
-          type: 'line', data: { labels: months, datasets },
-          options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: prop.name + ' — Monthly Rent by Unit Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } } }
-        }, CW, CH);
-        const imgIdP = wb.addImage({ base64: imgP, extension: 'png' });
-        wsT.addImage(imgIdP, { tl: { col: 0, row: tRow }, ext: { width: CW, height: CH } });
-        tRow += Math.ceil(CH / 20) + 2;
-      } catch(e) { console.warn('Property rent trend failed:', e); }
+      const sheetName = (prop.name || 'Property').substring(0, 28).replace(/[\\\/\*\?\[\]:]/g, '');
+      const wsP = wb.addWorksheet(sheetName, { properties: { tabColor: { argb: 'A8706A' } } });
+      const pColWidths = [{ width: 14 }, ...months.map(() => ({ width: 13 })), { width: 14 }, { width: 14 }];
+      wsP.columns = pColWidths;
 
-      // $/SF chart for this property
+      let pRow = 1;
+      const pTitle = wsP.getCell(pRow, 1); pTitle.value = prop.name; pTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY }; pRow++;
+      const pAddr = wsP.getCell(pRow, 1); pAddr.value = (prop.address || '') + '  |  ' + (prop.totalUnits || 0) + ' units'; pAddr.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } }; pRow += 2;
+
+      // Rent section
+      const rentTitle = wsP.getCell(pRow, 1); rentTitle.value = 'Monthly Weighted Avg Rent'; rentTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; pRow++;
+      const rentHdrRow = pRow;
+      xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
+
+      propBedTypes.forEach((bt, bi) => {
+        const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
+        const sty = xlBodyStyle(fill);
+        xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+        months.forEach((m, mi) => {
+          const v = getWtdRentForMonth(prop, bt, m);
+          xlWriteDataCell(wsP, pRow, 2 + mi, v ? Math.round(v) : '', sty, '$#,##0');
+        });
+        const firstCol = String.fromCharCode(66);
+        const lastCol = String.fromCharCode(66 + months.length - 1);
+        xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + lastCol + pRow + '="",' + firstCol + pRow + '=""),"",(' + lastCol + pRow + '-' + firstCol + pRow + '))' }, sty, '$#,##0');
+        xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + lastCol + pRow + '="",' + firstCol + pRow + '="",' + firstCol + pRow + '=0),"",(' + lastCol + pRow + '-' + firstCol + pRow + ')/' + firstCol + pRow + ')' }, sty, '0.0%');
+        pRow++;
+      });
+
+      // Overall weighted avg row
+      const allRentSty = xlBoldStyle(XL_AVG_TAN);
+      xlWriteDataCell(wsP, pRow, 1, 'Overall Wtd Avg', { ...allRentSty, alignment: { horizontal: 'left' } });
+      months.forEach((m, mi) => {
+        let tR = 0, tU = 0;
+        prop.unitTypes.forEach(u => { if (u.monthlyRents && u.monthlyRents[m] > 0) { tR += u.monthlyRents[m] * u.units; tU += u.units; } });
+        xlWriteDataCell(wsP, pRow, 2 + mi, tU > 0 ? Math.round(tR / tU) : '', allRentSty, '$#,##0');
+      });
+      const oFirstCol = String.fromCharCode(66);
+      const oLastCol = String.fromCharCode(66 + months.length - 1);
+      xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + oLastCol + pRow + '="",' + oFirstCol + pRow + '=""),"",(' + oLastCol + pRow + '-' + oFirstCol + pRow + '))' }, allRentSty, '$#,##0');
+      xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + oLastCol + pRow + '="",' + oFirstCol + pRow + '="",' + oFirstCol + pRow + '=0),"",(' + oLastCol + pRow + '-' + oFirstCol + pRow + ')/' + oFirstCol + pRow + ')' }, allRentSty, '0.0%');
+      pRow += 3;
+
+      // $/SF section
       const psfBedTypes = BED_TYPES.filter(bt => {
         const fps = getFloorplansForType(prop, bt);
         return fps.length > 0 && months.some(m => getWtdPsfForMonth(prop, bt, m) !== null);
       });
       if (psfBedTypes.length > 0) {
-        try {
-          const datasets = psfBedTypes.map((bt, bi) => {
-            const data = months.map(m => { const v = getWtdPsfForMonth(prop, bt, m); return v ? Math.round(v * 100) / 100 : null; });
-            return { label: bt, data, borderColor: UNIT_TYPE_COLORS[bi % UNIT_TYPE_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+        const psfTitle = wsP.getCell(pRow, 1); psfTitle.value = 'Monthly Weighted Avg $/SF'; psfTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; pRow++;
+        xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
+
+        psfBedTypes.forEach((bt, bi) => {
+          const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
+          const sty = xlBodyStyle(fill);
+          xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+          months.forEach((m, mi) => {
+            const v = getWtdPsfForMonth(prop, bt, m);
+            xlWriteDataCell(wsP, pRow, 2 + mi, v ? Math.round(v * 100) / 100 : '', sty, '$#,##0.00');
           });
-          const imgPSF = renderChartToBase64({
-            type: 'line', data: { labels: months, datasets },
-            options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: prop.name + ' — Monthly $/SF by Unit Type', font: { size: 14, weight: 'bold', ...chartFont } } }, scales: { y: { ticks: { callback: v => '$' + v.toFixed(2) } } } }
-          }, CW, CH);
-          const imgIdPSF = wb.addImage({ base64: imgPSF, extension: 'png' });
-          wsT.addImage(imgIdPSF, { tl: { col: 0, row: tRow }, ext: { width: CW, height: CH } });
-          tRow += Math.ceil(CH / 20) + 2;
-        } catch(e) { console.warn('Property PSF trend failed:', e); }
+          const fc = String.fromCharCode(66), lc = String.fromCharCode(66 + months.length - 1);
+          xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + lc + pRow + '="",' + fc + pRow + '=""),"",(' + lc + pRow + '-' + fc + pRow + '))' }, sty, '$#,##0.00');
+          xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + lc + pRow + '="",' + fc + pRow + '="",' + fc + pRow + '=0),"",(' + lc + pRow + '-' + fc + pRow + ')/' + fc + pRow + ')' }, sty, '0.0%');
+          pRow++;
+        });
+
+        const allPsfSty = xlBoldStyle(XL_AVG_TAN);
+        xlWriteDataCell(wsP, pRow, 1, 'Overall Wtd Avg', { ...allPsfSty, alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => {
+          let tR = 0, tU = 0;
+          prop.unitTypes.forEach(u => { if (u.monthlyPerSF && u.monthlyPerSF[m] > 0) { tR += u.monthlyPerSF[m] * u.units; tU += u.units; } });
+          xlWriteDataCell(wsP, pRow, 2 + mi, tU > 0 ? Math.round(tR / tU * 100) / 100 : '', allPsfSty, '$#,##0.00');
+        });
+        const pfc = String.fromCharCode(66), plc = String.fromCharCode(66 + months.length - 1);
+        xlWriteDataCell(wsP, pRow, 2 + months.length, { formula: 'IF(OR(' + plc + pRow + '="",' + pfc + pRow + '=""),"",(' + plc + pRow + '-' + pfc + pRow + '))' }, allPsfSty, '$#,##0.00');
+        xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + plc + pRow + '="",' + pfc + pRow + '="",' + pfc + pRow + '=0),"",(' + plc + pRow + '-' + pfc + pRow + ')/' + pfc + pRow + ')' }, allPsfSty, '0.0%');
       }
     });
   }

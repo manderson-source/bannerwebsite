@@ -1137,12 +1137,18 @@ function _chartSerXml(ser, idx, chartType) {
     ? `<c:spPr><a:ln w="22225"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr>`
     : `<c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr>`;
   const marker = chartType === 'line' ? `<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr></c:marker>` : '';
+  const invertNeg = chartType === 'line' ? '' : '<c:invertIfNegative val="0"/>';
+  const dPtXml = (ser.dPtColors && chartType !== 'line')
+    ? ser.dPtColors.map((c, i) => `<c:dPt><c:idx val="${i}"/><c:invertIfNegative val="0"/><c:bubble3D val="0"/><c:spPr><a:solidFill><a:srgbClr val="${c}"/></a:solidFill></c:spPr></c:dPt>`).join('')
+    : '';
   return `<c:ser>
     <c:idx val="${idx}"/>
     <c:order val="${idx}"/>
     ${nameXml}
     ${spPr}
     ${marker}
+    ${invertNeg}
+    ${dPtXml}
     <c:cat><c:strRef><c:f>${_xmlEsc(ser.catRef)}</c:f></c:strRef></c:cat>
     <c:val><c:numRef><c:f>${_xmlEsc(ser.valRef)}</c:f></c:numRef></c:val>
     ${chartType === 'line' ? '<c:smooth val="0"/>' : ''}
@@ -1210,6 +1216,8 @@ function _buildChartXml(spec) {
     plot = `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${seriesXml}<c:marker val="1"/>${axIds}</c:lineChart>`;
   } else if (spec.type === 'stackedbar') {
     plot = `<c:barChart><c:barDir val="col"/><c:grouping val="stacked"/><c:varyColors val="0"/>${seriesXml}<c:overlap val="100"/>${axIds}</c:barChart>`;
+  } else if (spec.type === 'vbar') {
+    plot = `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${seriesXml}<c:gapWidth val="40"/>${axIds}</c:barChart>`;
   } else {
     plot = `<c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>${seriesXml}<c:gapWidth val="60"/>${axIds}</c:barChart>`;
   }
@@ -1225,7 +1233,7 @@ function _buildChartXml(spec) {
       ${catAx}
       ${valAx}
     </c:plotArea>
-    <c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
+    ${spec.noLegend ? '' : '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'}
     <c:plotVisOnly val="1"/>
   </c:chart>
 </c:chartSpace>`;
@@ -1415,6 +1423,7 @@ async function exportToExcel() {
 
   const mostRecent = months.length > 0 ? months[months.length - 1] : null;
   let subjAvgRent = 0, subjAvgPSF = 0;
+  const diffUnitVals = [], diffPsfVals = [];
 
   all.forEach((p, pi) => {
     const r = 6 + pi;
@@ -1449,8 +1458,11 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, r, 7, Math.round(avgSF), sty, '#,##0');
     xlWriteDataCell(ws1, r, 8, Math.round(avgRent), sty, '$#,##0');
     xlWriteDataCell(ws1, r, 9, Math.round(avgPSF * 100) / 100, sty, '$#,##0.00');
-    xlWriteDataCell(ws1, r, 10, isS ? '' : Math.round(avgRent - subjAvgRent), sty, '$#,##0;[Red]-$#,##0');
-    xlWriteDataCell(ws1, r, 11, isS ? '' : Math.round((avgPSF - subjAvgPSF) * 100) / 100, sty, '$#,##0.00;[Red]-$#,##0.00');
+    const diffUnit = isS ? null : Math.round(avgRent - subjAvgRent);
+    const diffPsf = isS ? null : Math.round((avgPSF - subjAvgPSF) * 100) / 100;
+    xlWriteDataCell(ws1, r, 10, diffUnit === null ? '' : diffUnit, sty, '$#,##0;[Red]-$#,##0');
+    xlWriteDataCell(ws1, r, 11, diffPsf === null ? '' : diffPsf, sty, '$#,##0.00;[Red]-$#,##0.00');
+    if (!isS) { diffUnitVals.push(diffUnit); diffPsfVals.push(diffPsf); }
   });
 
   if (comps.length > 0) {
@@ -1505,14 +1517,17 @@ async function exportToExcel() {
   if (comps.length > 0) {
     const diffChartRow = 4 + Math.max(16, all.length + 4) + 2;
     const diffChartH = 4 + Math.max(16, comps.length + 4);
+    const GREEN = '4CAF50', RED = 'E53935';
+    const diffUnitColors = diffUnitVals.map(v => v >= 0 ? GREEN : RED);
+    const diffPsfColors = diffPsfVals.map(v => v >= 0 ? GREEN : RED);
     xlChartSpecs.push({
-      sheetName: 'Summary', type: 'bar', title: 'Rent Premium / Discount vs Subject ($/Unit)', numFmt: '$#,##0',
-      series: [{ name: 'Diff ($/Unit)', catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$J$7:$J$${5 + all.length}` }],
+      sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/Unit)', numFmt: '$#,##0',
+      series: [{ name: 'Diff ($/Unit)', dPtColors: diffUnitColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$J$7:$J$${5 + all.length}` }],
       anchor: { fromCol: 10, fromRow: diffChartRow, toCol: 19, toRow: diffChartRow + diffChartH - 4 }
     });
     xlChartSpecs.push({
-      sheetName: 'Summary', type: 'bar', title: 'Rent Premium / Discount vs Subject ($/SF)', numFmt: '$#,##0.00',
-      series: [{ name: 'Diff ($/SF)', catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$K$7:$K$${5 + all.length}` }],
+      sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/SF)', numFmt: '$#,##0.00',
+      series: [{ name: 'Diff ($/SF)', dPtColors: diffPsfColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$K$7:$K$${5 + all.length}` }],
       anchor: { fromCol: 20, fromRow: diffChartRow, toCol: 29, toRow: diffChartRow + diffChartH - 4 }
     });
   }

@@ -1421,7 +1421,6 @@ async function exportToExcel() {
   const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Occupancy', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF', 'Diff vs Subject ($/Unit)', 'Diff vs Subject ($/SF)'];
   xlWriteHdrRow(ws1, 5, sumHeaders);
 
-  const mostRecent = months.length > 0 ? months[months.length - 1] : null;
   let subjAvgRent = 0, subjAvgPSF = 0;
   const diffUnitVals = [], diffPsfVals = [];
 
@@ -1431,16 +1430,10 @@ async function exportToExcel() {
     const fps = p.unitTypes;
     const tU = p.totalUnits || fps.reduce((s, u) => s + u.units, 0);
     const avgSF = tU > 0 ? fps.reduce((s, u) => s + u.sqft * u.units, 0) / tU : 0;
-    let avgRent = 0;
-    if (isS) {
-      avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
-    } else if (mostRecent) {
-      let trR = 0, trU = 0;
-      fps.forEach(fp => { const v = fp.monthlyRents ? fp.monthlyRents[mostRecent] : fp.marketRent; if (v && v > 0) { trR += v * fp.units; trU += fp.units; } });
-      avgRent = trU > 0 ? trR / trU : 0;
-    } else {
-      avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
-    }
+    // fp.marketRent is already each floorplan's own most-recent-month rent from parsing —
+    // don't re-derive via the shared `months` array, since a comp with different month
+    // headers than the first-loaded comp would silently miss the lookup and zero out.
+    const avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
     const avgPSF = avgSF > 0 ? avgRent / avgSF : 0;
     if (isS) { subjAvgRent = avgRent; subjAvgPSF = avgPSF; }
 
@@ -1475,14 +1468,7 @@ async function exportToExcel() {
       const fps = p.unitTypes;
       const tU = p.totalUnits || fps.reduce((s, u) => s + u.units, 0);
       const sf = tU > 0 ? fps.reduce((s, u) => s + u.sqft * u.units, 0) / tU : 0;
-      let rent = 0;
-      if (mostRecent) {
-        let trR = 0, trU = 0;
-        fps.forEach(fp => { const v = fp.monthlyRents ? fp.monthlyRents[mostRecent] : fp.marketRent; if (v > 0) { trR += v * fp.units; trU += fp.units; } });
-        rent = trU > 0 ? trR / trU : 0;
-      } else {
-        rent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
-      }
+      const rent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
       cUnits.push(tU); cSFs.push(sf); cRents.push(rent);
     });
     const aU = Math.round(cUnits.reduce((a, b) => a + b, 0) / comps.length);

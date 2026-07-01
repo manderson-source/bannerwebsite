@@ -314,7 +314,10 @@
         <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Avg SF by Bedroom Type</div><div class="chart-container"><canvas id="chartSqftComp"></canvas></div></div>
       </div>
       <div class="grid-2 section-gap">
-        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Rent Premium / Discount vs Subject</div><div class="chart-container"><canvas id="chartRentDiff"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Rent Premium / Discount vs Subject ($/Unit)</div><div class="chart-container"><canvas id="chartRentDiff"></canvas></div></div>
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Rent Premium / Discount vs Subject ($/SF)</div><div class="chart-container"><canvas id="chartRentDiffPsf"></canvas></div></div>
+      </div>
+      <div class="section-gap">
         <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>Unit Mix Distribution</div><div class="chart-container"><canvas id="chartUnitMix"></canvas></div></div>
       </div>
       <div class="section-gap">
@@ -867,10 +870,21 @@ function renderCharts() {
   });
 
   const subj = subjectProperty, sRent = subj.totalUnits>0 ? subj.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/subj.totalUnits : 0;
+  const sSF = subj.totalUnits>0 ? subj.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/subj.totalUnits : 0;
+  const sPsf = sSF>0 ? sRent/sSF : 0;
   const diffs = properties.map(p => { const t=p.totalUnits||1; return p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t - sRent; });
   charts.rentDiff = new Chart(document.getElementById('chartRentDiff'), {
     type: 'bar', data: { labels: properties.map(p=>p.name), datasets: [{ label: 'Rent Diff ($)', data: diffs, backgroundColor: diffs.map(d=>d>=0?'#4CAF50':'#E53935'), borderColor: diffs.map(d=>d>=0?'#388E3C':'#C62828'), borderWidth: 1, borderRadius: 2 }] },
     options: { ...defaultOpts, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v=>(v>=0?'+$':'-$')+Math.abs(v).toLocaleString(), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
+  });
+
+  const diffsPsf = properties.map(p => {
+    const t=p.totalUnits||1, pR = p.unitTypes.reduce((s,u)=>s+u.marketRent*u.units,0)/t, pSF = p.unitTypes.reduce((s,u)=>s+u.sqft*u.units,0)/t;
+    return (pSF>0 ? pR/pSF : 0) - sPsf;
+  });
+  charts.rentDiffPsf = new Chart(document.getElementById('chartRentDiffPsf'), {
+    type: 'bar', data: { labels: properties.map(p=>p.name), datasets: [{ label: 'Rent Diff ($/SF)', data: diffsPsf.map(d=>Math.round(d*100)/100), backgroundColor: diffsPsf.map(d=>d>=0?'#4CAF50':'#E53935'), borderColor: diffsPsf.map(d=>d>=0?'#388E3C':'#C62828'), borderWidth: 1, borderRadius: 2 }] },
+    options: { ...defaultOpts, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v=>(v>=0?'+$':'-$')+Math.abs(v).toFixed(2), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
   });
 
   charts.unitMix = new Chart(document.getElementById('chartUnitMix'), {
@@ -1390,16 +1404,17 @@ async function exportToExcel() {
 
   // ── Sheet 1: Summary ──
   const ws1 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: '1B2A4A' } } });
-  ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }];
+  ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }, { width: 18 }, { width: 20 }];
 
   const titleCell = ws1.getCell('A1'); titleCell.value = 'Rent Comp Analysis'; titleCell.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
   const subCell = ws1.getCell('A2'); subCell.value = 'Subject: ' + subj.name; subCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
   const dateCell = ws1.getCell('A3'); dateCell.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
 
-  const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Occupancy', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF'];
+  const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Occupancy', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF', 'Diff vs Subject ($/Unit)', 'Diff vs Subject ($/SF)'];
   xlWriteHdrRow(ws1, 5, sumHeaders);
 
   const mostRecent = months.length > 0 ? months[months.length - 1] : null;
+  let subjAvgRent = 0, subjAvgPSF = 0;
 
   all.forEach((p, pi) => {
     const r = 6 + pi;
@@ -1418,6 +1433,7 @@ async function exportToExcel() {
       avgRent = tU > 0 ? fps.reduce((s, u) => s + u.marketRent * u.units, 0) / tU : 0;
     }
     const avgPSF = avgSF > 0 ? avgRent / avgSF : 0;
+    if (isS) { subjAvgRent = avgRent; subjAvgPSF = avgPSF; }
 
     const fill = isS ? XL_SUBJ_BLUE : (pi % 2 === 1 ? XL_ALT_GRAY : null);
     const sty = isS ? xlBoldStyle(fill) : xlBodyStyle(fill);
@@ -1433,6 +1449,8 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, r, 7, Math.round(avgSF), sty, '#,##0');
     xlWriteDataCell(ws1, r, 8, Math.round(avgRent), sty, '$#,##0');
     xlWriteDataCell(ws1, r, 9, Math.round(avgPSF * 100) / 100, sty, '$#,##0.00');
+    xlWriteDataCell(ws1, r, 10, isS ? '' : Math.round(avgRent - subjAvgRent), sty, '$#,##0;[Red]-$#,##0');
+    xlWriteDataCell(ws1, r, 11, isS ? '' : Math.round((avgPSF - subjAvgPSF) * 100) / 100, sty, '$#,##0.00;[Red]-$#,##0.00');
   });
 
   if (comps.length > 0) {
@@ -1469,6 +1487,8 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, avgRow, 7, aSF, avgSty, '#,##0');
     xlWriteDataCell(ws1, avgRow, 8, aR, avgSty, '$#,##0');
     xlWriteDataCell(ws1, avgRow, 9, Math.round(aPSF * 100) / 100, avgSty, '$#,##0.00');
+    xlWriteDataCell(ws1, avgRow, 10, Math.round(aR - subjAvgRent), avgSty, '$#,##0;[Red]-$#,##0');
+    xlWriteDataCell(ws1, avgRow, 11, Math.round((aPSF - subjAvgPSF) * 100) / 100, avgSty, '$#,##0.00;[Red]-$#,##0.00');
   }
 
   xlChartSpecs.push({
@@ -1481,6 +1501,21 @@ async function exportToExcel() {
     series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$I$6:$I$${5 + all.length}` }],
     anchor: { fromCol: 20, fromRow: 4, toCol: 29, toRow: 4 + Math.max(16, all.length + 4) }
   });
+
+  if (comps.length > 0) {
+    const diffChartRow = 4 + Math.max(16, all.length + 4) + 2;
+    const diffChartH = 4 + Math.max(16, comps.length + 4);
+    xlChartSpecs.push({
+      sheetName: 'Summary', type: 'bar', title: 'Rent Premium / Discount vs Subject ($/Unit)', numFmt: '$#,##0',
+      series: [{ name: 'Diff ($/Unit)', catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$J$7:$J$${5 + all.length}` }],
+      anchor: { fromCol: 10, fromRow: diffChartRow, toCol: 19, toRow: diffChartRow + diffChartH - 4 }
+    });
+    xlChartSpecs.push({
+      sheetName: 'Summary', type: 'bar', title: 'Rent Premium / Discount vs Subject ($/SF)', numFmt: '$#,##0.00',
+      series: [{ name: 'Diff ($/SF)', catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$K$7:$K$${5 + all.length}` }],
+      anchor: { fromCol: 20, fromRow: diffChartRow, toCol: 29, toRow: diffChartRow + diffChartH - 4 }
+    });
+  }
 
   // ── Sheet 2: Rent Trend by Bedroom ──
   if (months.length > 0) {

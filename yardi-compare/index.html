@@ -1975,6 +1975,7 @@ function loadComparison(id) {
 
   const body = document.getElementById('subjectMixBody');
   body.innerHTML = '';
+  document.getElementById('pricingRationale').style.display = 'none';
   s.subject.unitTypes.forEach(u => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>
@@ -2078,6 +2079,7 @@ function _loadSharedData(data, prefix) {
 
   const body = document.getElementById('subjectMixBody');
   body.innerHTML = '';
+  document.getElementById('pricingRationale').style.display = 'none';
   (data.subject.unitTypes || []).forEach(u => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>

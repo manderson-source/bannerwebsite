@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <style>
     :root {
       --navy: #1b2a4a;
@@ -347,7 +348,14 @@
     </div>
     <div class="flex-between" style="margin-bottom:0.5rem;">
       <span class="section-label">Saved Comparisons</span>
-      <span class="help-note" id="savedCount"></span>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <button class="btn btn-secondary" onclick="document.getElementById('importJsonInput').click()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import JSON
+        </button>
+        <input type="file" id="importJsonInput" accept=".json" style="display:none" onchange="importComparisonFile(this)">
+        <span class="help-note" id="savedCount"></span>
+      </div>
     </div>
     <div id="savedEmpty" class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -1818,6 +1826,14 @@ function renderSavedList() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Excel
         </button>
+        <button class="btn btn-secondary" onclick="event.stopPropagation();shareComparison('${s.id}')" title="Copy share link">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share Link
+        </button>
+        <button class="btn btn-secondary" onclick="event.stopPropagation();exportComparisonJson('${s.id}')" title="Download as JSON file">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          JSON
+        </button>
         <button class="btn btn-remove" onclick="event.stopPropagation();deleteComparison('${s.id}')">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           Delete
@@ -1878,6 +1894,105 @@ function deleteComparison(id) {
   notify('Comparison deleted', 'success');
   renderSavedList();
 }
+
+// ── Sharing ──
+function _stripForShare(s) {
+  const strip = obj => JSON.parse(JSON.stringify(obj, (k, v) => k === 'id' || k === 'fileName' ? undefined : v));
+  return { name: s.name, date: s.date, subject: strip(s.subject), comps: strip(s.comps) };
+}
+
+function shareComparison(id) {
+  const saved = getSavedComparisons();
+  const s = saved.find(x => x.id === id);
+  if (!s) return;
+  try {
+    const json = JSON.stringify(_stripForShare(s));
+    const compressed = LZString.compressToEncodedURIComponent(json);
+    const url = location.origin + location.pathname + '#share=' + compressed;
+    if (url.length > 32000) { notify('Comparison too large for a share link — use Export JSON instead', 'error'); return; }
+    navigator.clipboard.writeText(url).then(() => notify('Share link copied to clipboard!', 'success')).catch(() => {
+      prompt('Copy this share link:', url);
+    });
+  } catch (err) { notify('Failed to create share link: ' + err.message, 'error'); }
+}
+
+function exportComparisonJson(id) {
+  const saved = getSavedComparisons();
+  const s = saved.find(x => x.id === id);
+  if (!s) return;
+  const json = JSON.stringify(_stripForShare(s), null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (s.name || 'comparison').replace(/[^a-zA-Z0-9 _-]/g, '_') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('JSON file downloaded', 'success');
+}
+
+function importComparisonFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      _loadSharedData(data, 'Imported: ');
+    } catch (err) { notify('Invalid JSON file: ' + err.message, 'error'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function _loadSharedData(data, prefix) {
+  if (!data.subject || !data.comps || !Array.isArray(data.comps)) { notify('Invalid comparison data', 'error'); return; }
+  // Restore IDs
+  data.subject.id = 'subject';
+  data.comps.forEach((c, i) => { c.id = c.id || 'prop_shared_' + Date.now() + '_' + i; });
+
+  properties = data.comps;
+  subjectProperty = data.subject;
+  renderPropertyCards();
+
+  document.getElementById('subjectName').value = data.subject.name || '';
+  document.getElementById('subjectYearBuilt').value = data.subject.yearBuilt || '';
+  document.getElementById('subjectOccupancy').value = data.subject.occupancy != null ? data.subject.occupancy : '';
+
+  const body = document.getElementById('subjectMixBody');
+  body.innerHTML = '';
+  (data.subject.unitTypes || []).forEach(u => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.units}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.sqft}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+      <td><input type="number" value="${u.marketRent}" min="0" oninput="calcSubjectRow(this)" onkeydown="mixKeyNav(event)"></td>
+      <td class="calc-cell">${u.rentPerSqft ? '$'+u.rentPerSqft.toFixed(2) : '—'}</td><td class="calc-cell">—</td>
+      <td><button class="btn btn-remove" style="padding:0.15rem 0.4rem;font-size:0.7rem;" onclick="this.closest('tr').remove();updateSubjectTotals();">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button></td>`;
+    body.appendChild(tr);
+  });
+  updateSubjectTotals();
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('saveCompName').value = data.name || '';
+  notify((prefix || '') + (data.name || 'Shared comparison') + ' — loaded! Click Save to keep it.', 'success');
+  switchTab('dashboard');
+}
+
+function checkShareUrl() {
+  const hash = location.hash;
+  if (!hash.startsWith('#share=')) return;
+  try {
+    const compressed = hash.slice(7);
+    const json = LZString.decompressFromEncodedURIComponent(compressed);
+    if (!json) { notify('Invalid or corrupted share link', 'error'); return; }
+    const data = JSON.parse(json);
+    history.replaceState(null, '', location.pathname);
+    _loadSharedData(data, 'Shared: ');
+  } catch (err) { notify('Failed to load share link: ' + err.message, 'error'); }
+}
+window.addEventListener('DOMContentLoaded', checkShareUrl);
 
 // ── Helpers ──
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}

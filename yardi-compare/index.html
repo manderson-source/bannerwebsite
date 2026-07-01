@@ -259,10 +259,16 @@
           <div style="margin-top:1.15rem;">
             <div class="flex-between">
               <label style="font-family:var(--serif); font-size:0.85rem; font-weight:700; color:var(--navy);">Unit Mix</label>
-              <button class="btn btn-primary" onclick="addSubjectRow()" style="font-size:0.75rem; padding:0.3rem 0.65rem;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Row
-              </button>
+              <div style="display:flex; gap:0.4rem;">
+                <button class="btn btn-secondary" onclick="suggestPricing()" style="font-size:0.75rem; padding:0.3rem 0.65rem;" title="Suggest rents based on loaded comps">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="4"/></svg>
+                  Suggest Pricing
+                </button>
+                <button class="btn btn-primary" onclick="addSubjectRow()" style="font-size:0.75rem; padding:0.3rem 0.65rem;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add Row
+                </button>
+              </div>
             </div>
             <table class="unit-mix-table" id="subjectMixTable">
               <thead><tr>
@@ -271,6 +277,14 @@
               </tr></thead>
               <tbody id="subjectMixBody"></tbody>
             </table>
+            <div id="pricingRationale" style="display:none; margin-top:0.75rem; padding:0.75rem 0.9rem; background:var(--sky-pale); border:1px solid var(--steel); border-radius:6px;">
+              <div style="font-family:var(--serif); font-weight:700; font-size:0.8rem; color:var(--navy); margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="4"/></svg>
+                Suggested Pricing Rationale
+              </div>
+              <ul id="pricingRationaleList" style="margin:0 0 0.4rem 1.1rem; font-size:0.78rem; color:var(--text-mid); line-height:1.5;"></ul>
+              <div style="font-size:0.7rem; color:var(--text-light); font-style:italic;">Data-driven estimate from your loaded comps — not a substitute for market judgment. Review before applying.</div>
+            </div>
           </div>
           <div style="margin-top:1rem; text-align:right;">
             <button class="btn btn-primary" onclick="applySubject()" style="padding:0.5rem 1.25rem;">
@@ -615,6 +629,7 @@ function clearAll() {
   document.getElementById('subjectYearBuilt').value = '';
   document.getElementById('subjectOccupancy').value = '';
   document.getElementById('subjectMixBody').innerHTML = '';
+  document.getElementById('pricingRationale').style.display = 'none';
   initSubjectRows(); renderPropertyCards();
   document.getElementById('exportBtn').disabled = true;
   document.getElementById('dashboardContent').style.display = 'none';
@@ -691,6 +706,80 @@ function updateSubjectTotals() {
     const units = parseFloat(tr.querySelectorAll('input')[1].value) || 0;
     tr.querySelectorAll('.calc-cell')[1].textContent = totalUnits > 0 ? (units / totalUnits * 100).toFixed(1) + '%' : '—';
   });
+}
+
+function suggestPricing() {
+  if (properties.length === 0) { notify('Load comp properties first', 'error'); return; }
+  const rows = document.getElementById('subjectMixBody').querySelectorAll('tr');
+  if (rows.length === 0) { notify('Add at least one unit type row first', 'error'); return; }
+
+  // Pool comp floorplans by normalized bedroom type across all loaded comps
+  const pool = {};
+  properties.forEach(p => {
+    p.unitTypes.forEach(u => {
+      if (u.units > 0 && u.sqft > 0 && u.marketRent > 0) {
+        const nt = normalizeUnitType(u.unitType);
+        if (!pool[nt]) pool[nt] = { units: 0, sfSum: 0, rentSum: 0, rents: [] };
+        pool[nt].units += u.units;
+        pool[nt].sfSum += u.sqft * u.units;
+        pool[nt].rentSum += u.marketRent * u.units;
+        pool[nt].rents.push(u.marketRent);
+      }
+    });
+  });
+
+  // Market condition adjustments from comp occupancy + year built vs subject
+  const occVals = properties.filter(p => p.occupancy != null).map(p => p.occupancy);
+  const avgOcc = occVals.length ? occVals.reduce((a,b)=>a+b,0) / occVals.length : null;
+  const ybVals = properties.filter(p => p.yearBuilt && !isNaN(parseInt(p.yearBuilt))).map(p => parseInt(p.yearBuilt));
+  const avgYb = ybVals.length ? Math.round(ybVals.reduce((a,b)=>a+b,0) / ybVals.length) : null;
+  const subjYb = parseInt(document.getElementById('subjectYearBuilt').value) || null;
+
+  let adjPct = 0;
+  const reasons = [];
+  if (avgOcc != null) {
+    if (avgOcc >= 95) { adjPct += 2; reasons.push('Comps average ' + avgOcc.toFixed(1) + '% occupancy — tight market supports pricing at or slightly above comp average.'); }
+    else if (avgOcc < 90) { adjPct -= 3; reasons.push('Comps average ' + avgOcc.toFixed(1) + '% occupancy — softer market, priced conservatively below comp average to stay competitive.'); }
+    else { reasons.push('Comps average ' + avgOcc.toFixed(1) + '% occupancy — healthy, balanced market, priced near comp average.'); }
+  }
+  if (subjYb && avgYb) {
+    const diff = subjYb - avgYb;
+    if (diff >= 5) { adjPct += 3; reasons.push('Subject is ~' + diff + ' yrs newer than the comp set (avg ' + avgYb + ') — modest new-construction premium applied.'); }
+    else if (diff <= -10) { adjPct -= 3; reasons.push('Subject is ~' + Math.abs(diff) + ' yrs older than the comp set (avg ' + avgYb + ') — discount applied to stay competitive.'); }
+  }
+  reasons.push('Base rent derived from each comp set\'s weighted $/SF, applied to the subject\'s unit size, then clamped within the observed comp rent range for safety.');
+
+  let filled = 0; const skipped = [];
+  rows.forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const typeRaw = inputs[0].value.trim();
+    if (!typeRaw) return;
+    const nt = normalizeUnitType(typeRaw);
+    const g = pool[nt];
+    if (!g || g.units === 0) { skipped.push(typeRaw); return; }
+    const wtdPsf = g.rentSum / g.sfSum;
+    let sqft = parseFloat(inputs[2].value) || 0;
+    if (sqft === 0) { sqft = Math.round(g.sfSum / g.units); inputs[2].value = sqft; }
+    let suggested = wtdPsf * sqft * (1 + adjPct / 100);
+    const minR = Math.min(...g.rents), maxR = Math.max(...g.rents);
+    suggested = Math.max(minR * 0.95, Math.min(maxR * 1.05, suggested));
+    suggested = Math.round(suggested / 5) * 5;
+    inputs[3].value = suggested;
+    calcSubjectRow(inputs[3]);
+    filled++;
+  });
+
+  const rationaleBox = document.getElementById('pricingRationale');
+  const rationaleList = document.getElementById('pricingRationaleList');
+  if (filled === 0) {
+    rationaleBox.style.display = 'none';
+    notify('No matching comp data found for these unit types', 'error');
+    return;
+  }
+  if (skipped.length) reasons.push('No comp data found for: ' + skipped.join(', ') + ' — left unchanged.');
+  rationaleList.innerHTML = reasons.map(r => '<li>' + esc(r) + '</li>').join('');
+  rationaleBox.style.display = 'block';
+  notify('Suggested pricing filled for ' + filled + ' unit type' + (filled !== 1 ? 's' : ''), 'success');
 }
 
 function applySubject() {

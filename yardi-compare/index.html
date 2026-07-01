@@ -357,6 +357,12 @@
     <div class="flex-between" style="margin-bottom:0.5rem;">
       <span class="section-label">Saved Comparisons</span>
       <div style="display:flex;align-items:center;gap:0.5rem;">
+        <select id="savedSortSelect" onchange="renderSavedList()" style="padding:0.4rem 0.6rem;border:1px solid var(--border);border-radius:5px;font-family:var(--sans);font-size:0.78rem;background:white;color:var(--text-mid);">
+          <option value="date-desc">Last Saved (Newest)</option>
+          <option value="date-asc">Last Saved (Oldest)</option>
+          <option value="name-asc">Name (A–Z)</option>
+          <option value="name-desc">Name (Z–A)</option>
+        </select>
         <button class="btn btn-secondary" onclick="document.getElementById('importJsonInput').click()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Import JSON
@@ -1824,6 +1830,16 @@ function renderSavedList() {
   if (saved.length === 0) { empty.style.display = 'block'; container.innerHTML = ''; return; }
   empty.style.display = 'none';
   container.innerHTML = '';
+
+  const sortMode = document.getElementById('savedSortSelect').value;
+  saved.sort((a, b) => {
+    switch (sortMode) {
+      case 'date-asc': return new Date(a.date) - new Date(b.date);
+      case 'name-asc': return a.name.localeCompare(b.name);
+      case 'name-desc': return b.name.localeCompare(a.name);
+      case 'date-desc': default: return new Date(b.date) - new Date(a.date);
+    }
+  });
 
   saved.forEach(s => {
     const card = document.createElement('div');

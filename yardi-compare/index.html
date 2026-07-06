@@ -544,7 +544,13 @@ function parseYardiWorkbook(wb, fileName) {
     if (!unitType && units > 0) continue;
     if (!unitType) continue;
 
-    const mostRecentRent = monthCols.length > 0 ? (parseFloat(cv(monthCols[monthCols.length - 1] + r)) || 0) : 0;
+    let mostRecentRent = monthCols.length > 0 ? (parseFloat(cv(monthCols[monthCols.length - 1] + r)) || 0) : 0;
+    // Some exports leave the most-recent month blank for a unit type (row not yet updated).
+    // Fall back to the average of whatever month columns do have data instead of showing $0.
+    if (!mostRecentRent) {
+      const monthRentVals = Object.values(monthlyRents);
+      if (monthRentVals.length > 0) mostRecentRent = monthRentVals.reduce((a, b) => a + b, 0) / monthRentVals.length;
+    }
 
     let monthlyPerSF = {};
     let mostRecentPerSF = null;
@@ -552,6 +558,10 @@ function parseYardiWorkbook(wb, fileName) {
       const cv2 = (ref) => { const c = sheet2[ref]; return c ? (c.v !== undefined ? c.v : '') : ''; };
       monthCols.forEach((col, mi) => { const v = parseFloat(cv2(col + r)); if (!isNaN(v) && v > 0) monthlyPerSF[monthHeaders[mi]] = v; });
       if (monthCols.length > 0) mostRecentPerSF = parseFloat(cv2(monthCols[monthCols.length - 1] + r)) || null;
+      if (!mostRecentPerSF) {
+        const psfVals = Object.values(monthlyPerSF);
+        if (psfVals.length > 0) mostRecentPerSF = psfVals.reduce((a, b) => a + b, 0) / psfVals.length;
+      }
     }
 
     unitTypes.push({

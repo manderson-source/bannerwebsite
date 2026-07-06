@@ -243,6 +243,14 @@
               <label>Property Name</label>
               <input type="text" id="subjectName" placeholder="e.g. The Grand at Riverside">
             </div>
+            <div class="form-group full-width">
+              <label>Address</label>
+              <input type="text" id="subjectAddress" placeholder="e.g. 123 Main St, Austin, TX 78701">
+            </div>
+            <div class="form-group">
+              <label>Market</label>
+              <input type="text" id="subjectMarket" placeholder="e.g. Austin">
+            </div>
             <div class="form-group">
               <label>Total Units</label>
               <input type="number" id="subjectTotalUnits" placeholder="Auto-calculated" readonly tabindex="-1" style="background:var(--warm-gray); color:var(--text-mid);">
@@ -660,6 +668,8 @@ function resetSetup() {
 function clearAll() {
   properties = []; subjectProperty = null;
   document.getElementById('subjectName').value = '';
+  document.getElementById('subjectAddress').value = '';
+  document.getElementById('subjectMarket').value = '';
   document.getElementById('subjectTotalUnits').value = '';
   document.getElementById('subjectYearBuilt').value = '';
   document.getElementById('subjectOccupancy').value = '';
@@ -830,7 +840,7 @@ function applySubject() {
   });
   if (unitTypes.length === 0) { notify('Add at least one unit type with data', 'error'); return; }
   const occInput = document.getElementById('subjectOccupancy').value;
-  subjectProperty = { id: 'subject', name, unitTypes, totalUnits: unitTypes.reduce((s,u) => s + u.units, 0), yearBuilt: document.getElementById('subjectYearBuilt').value, occupancy: occInput !== '' ? parseFloat(occInput) : null, monthHeaders: [] };
+  subjectProperty = { id: 'subject', name, address: document.getElementById('subjectAddress').value.trim(), market: document.getElementById('subjectMarket').value.trim(), unitTypes, totalUnits: unitTypes.reduce((s,u) => s + u.units, 0), yearBuilt: document.getElementById('subjectYearBuilt').value, occupancy: occInput !== '' ? parseFloat(occInput) : null, monthHeaders: [] };
   document.getElementById('exportBtn').disabled = false;
   notify('Subject applied — switching to Dashboard', 'success');
   switchTab('dashboard');
@@ -2038,6 +2048,8 @@ function loadComparison(id) {
   renderPropertyCards();
 
   document.getElementById('subjectName').value = s.subject.name;
+  document.getElementById('subjectAddress').value = s.subject.address || '';
+  document.getElementById('subjectMarket').value = s.subject.market || '';
   document.getElementById('subjectYearBuilt').value = s.subject.yearBuilt || '';
   document.getElementById('subjectOccupancy').value = s.subject.occupancy != null ? s.subject.occupancy : '';
 
@@ -2142,6 +2154,8 @@ function _loadSharedData(data, prefix) {
   renderPropertyCards();
 
   document.getElementById('subjectName').value = data.subject.name || '';
+  document.getElementById('subjectAddress').value = data.subject.address || '';
+  document.getElementById('subjectMarket').value = data.subject.market || '';
   document.getElementById('subjectYearBuilt').value = data.subject.yearBuilt || '';
   document.getElementById('subjectOccupancy').value = data.subject.occupancy != null ? data.subject.occupancy : '';
 

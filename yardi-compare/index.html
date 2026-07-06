@@ -534,7 +534,9 @@ function parseYardiWorkbook(wb, fileName) {
   const unitTypes = [];
   for (let r = headerRow + 1; r <= headerRow + 30; r++) {
     const unitType = String(cv('A' + r) || '').trim();
-    const units = parseFloat(cv('B' + r)) || 0;
+    const unitsCell = cv('B' + r);
+    const unitsProvided = unitsCell !== '' && !isNaN(parseFloat(unitsCell));
+    const units = unitsProvided ? parseFloat(unitsCell) : 0;
     const sqft = parseFloat(cv('C' + r)) || 0;
 
     const monthlyRents = {};
@@ -567,11 +569,27 @@ function parseYardiWorkbook(wb, fileName) {
     unitTypes.push({
       unitType, units, sqft, marketRent: mostRecentRent,
       rentPerSqft: mostRecentPerSF || (sqft > 0 && mostRecentRent > 0 ? mostRecentRent / sqft : null),
-      monthlyRents, monthlyPerSF
+      monthlyRents, monthlyPerSF, _unitsProvided: unitsProvided
     });
   }
 
   if (unitTypes.length === 0) { notify('No unit data in ' + fileName, 'error'); return null; }
+
+  // Some exports leave the per-floorplan "No. of Units" column blank for every row even
+  // though the property-level total (above the table) is populated. Since every average
+  // in the app is weighted by each row's unit count, blank units silently zero out that
+  // floorplan's contribution and can collapse the whole property's average to $0.
+  // Distribute the property's declared total evenly across floorplans missing a count,
+  // preserving the sum so weighted averages compute correctly everywhere downstream.
+  const missingUnitRows = unitTypes.filter(u => !u._unitsProvided);
+  if (missingUnitRows.length > 0) {
+    const providedSum = unitTypes.filter(u => u._unitsProvided).reduce((s, u) => s + u.units, 0);
+    const remaining = totalUnits > providedSum ? totalUnits - providedSum : 0;
+    const perRow = remaining > 0 ? remaining / missingUnitRows.length : 1;
+    missingUnitRows.forEach(u => { u.units = perRow; });
+  }
+  unitTypes.forEach(u => { delete u._unitsProvided; });
+
   const id = 'prop_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
   return { id, name: propName, address, market, submarket, totalUnits, fileName, unitTypes, monthHeaders };
 }

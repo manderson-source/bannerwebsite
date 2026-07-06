@@ -1018,7 +1018,7 @@ function renderSummaryTable() {
     b += `<td${cls}>${yb || '—'}</td>`;
     const occ = isS ? (subjectProperty.occupancy != null ? subjectProperty.occupancy : null) : p.occupancy;
     const occDisplay = occ != null ? occ.toFixed(1) + '%' : '—';
-    b += `<td${cls}>${p.totalUnits}</td><td${cls}>${occDisplay}</td><td${cls}>${p.unitTypes.length}</td>`;
+    b += `<td${cls}>${Math.round(p.totalUnits)}</td><td${cls}>${occDisplay}</td><td${cls}>${p.unitTypes.length}</td>`;
     b += `<td${cls}>${fmtN(Math.round(wS))}</td><td${cls}>${fmtC(Math.round(wR))}</td>`;
     b += `<td${cls}>${wS>0?'$'+(wR/wS).toFixed(2):'—'}</td>`;
     b += `<td${cls}>${rents.length?fmtC(Math.min(...rents)):'—'}</td>`;
@@ -1082,7 +1082,7 @@ function renderUnitTypeTables() {
       const cls = isS ? ' class="subject-col"' : '';
       const nameLabel = isS ? esc(p.name) + ' <span class="badge badge-subject">Subject</span>' : esc(p.name);
       tr.innerHTML = `<td class="prop-name${isS?' subject-col':''}">${nameLabel}</td>
-        <td${cls}>${agg.units}</td>
+        <td${cls}>${Math.round(agg.units)}</td>
         <td${cls}>${fmtN(agg.sqft)}</td>
         <td${cls}>${fmtC(agg.marketRent)}</td>
         <td${cls}>${psf}</td>
@@ -1107,7 +1107,7 @@ function renderUnitTypeTables() {
         diffPctCell = `<span class="${cls}">${d>=0?'+':''}${pct}%</span>`;
       }
       tr.innerHTML = `<td class="prop-name">COMP AVERAGE</td>
-        <td>${avgUnits}</td><td>${fmtN(Math.round(avgSF))}</td><td>${fmtC(Math.round(avgRent))}</td>
+        <td>${Math.round(avgUnits)}</td><td>${fmtN(Math.round(avgSF))}</td><td>${fmtC(Math.round(avgRent))}</td>
         <td>${avgPSF?'$'+avgPSF.toFixed(2):'—'}</td><td>${diffCell}</td><td>${diffPctCell}</td>`;
       tbody.appendChild(tr);
     }

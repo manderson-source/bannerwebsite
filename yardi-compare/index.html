@@ -532,7 +532,11 @@ function parseYardiWorkbook(wb, fileName) {
   colLetters.forEach(col => { const val = String(cv(col + headerRow) || '').trim(); if (val) { monthCols.push(col); monthHeaders.push(val); } });
 
   const unitTypes = [];
-  for (let r = headerRow + 1; r <= headerRow + 30; r++) {
+  // Cap is a safety ceiling, not an expected table size — the loop below terminates
+  // on its own once it hits a genuinely blank row. Properties with many distinct
+  // floorplan/unit rows (50+) were previously truncated by a much smaller cap here,
+  // silently dropping entire bedroom types and skewing every downstream average.
+  for (let r = headerRow + 1; r <= headerRow + 500; r++) {
     const unitType = String(cv('A' + r) || '').trim();
     const unitsCell = cv('B' + r);
     const unitsProvided = unitsCell !== '' && !isNaN(parseFloat(unitsCell));

@@ -145,6 +145,15 @@
     .section-gap { margin-top: 1.25rem; }
     .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-light); }
     .empty-state svg { margin-bottom: 0.75rem; color: var(--border); }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(27,42,74,0.55); z-index: 300; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 1.5rem; width: 100%; max-width: 420px; }
+    .modal-box h3 { font-family: var(--serif); font-size: 1.05rem; font-weight: 700; color: var(--navy); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; }
+    .modal-box p.help-note { margin-bottom: 1rem; }
+    .modal-box input { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 5px; font-family: var(--sans); font-size: 0.9rem; margin-bottom: 1rem; }
+    .modal-box input:focus { outline: none; border-color: var(--steel); box-shadow: 0 0 0 2px rgba(74,111,165,0.1); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+
     .badge { display: inline-block; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
     .badge-subject { background: var(--steel); color: white; }
     .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
@@ -236,7 +245,7 @@
             <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" multiple>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="6" x2="12" y2="6"/></svg>
             <h2>Drop Yardi Property Detail files here</h2>
-            <p>or click to browse &mdash; Rental Rate History exports (.xlsx)</p>
+            <p>or click to browse &mdash; Yardi Rental Rate History or CoStar Unit Mix exports (.xlsx)</p>
           </div>
           <div id="propertiesSection" style="display:none; margin-top:1rem;">
             <div class="flex-between">
@@ -422,6 +431,18 @@
 
 <div class="notification" id="notification"></div>
 
+<div class="modal-overlay" id="costarNameModal">
+  <div class="modal-box">
+    <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Name This Property</h3>
+    <p class="help-note">CoStar Unit Mix exports don't include a property name. Enter one to add it as a comp.</p>
+    <input type="text" id="costarNameInput" placeholder="e.g. The Grand at Riverside" onkeydown="if(event.key==='Enter')confirmCostarName()">
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="cancelCostarName()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmCostarName()">Add Property</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Muted color palette ──
 const SUBJECT_COLOR = '#1A56DB';
@@ -537,12 +558,112 @@ function handleFiles(fileList) {
     reader.onload = function(e) {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' });
-        const parsed = parseYardiWorkbook(wb, file.name);
-        if (parsed) { properties.push(parsed); notify(parsed.name + ' loaded — ' + parsed.unitTypes.length + ' floorplans', 'success'); renderPropertyCards(); }
+        if (isCoStarWorkbook(wb)) {
+          const parsed = parseCoStarWorkbook(wb, file.name);
+          if (parsed) { costarPendingQueue.push(parsed); processCostarQueue(); }
+        } else {
+          const parsed = parseYardiWorkbook(wb, file.name);
+          if (parsed) { properties.push(parsed); notify(parsed.name + ' loaded — ' + parsed.unitTypes.length + ' floorplans', 'success'); renderPropertyCards(); }
+        }
       } catch (err) { notify('Error reading ' + file.name + ': ' + err.message, 'error'); }
     };
     reader.readAsArrayBuffer(file);
   });
+}
+
+// ── CoStar Unit Mix Parser ──
+// CoStar's "Unit Mix" export has a completely different layout from Yardi's Property
+// Detail export (columns: Beds, Baths, Avg SF, # Units, ... Avg Asking Rent/Unit, ...)
+// and — unlike Yardi — never includes the property's name, address, or market, so the
+// user is prompted for a name via a modal right after the file is parsed.
+function isCoStarWorkbook(wb) {
+  const sheet1 = wb.Sheets[wb.SheetNames[0]];
+  const a1 = sheet1 && sheet1['A1'] ? String(sheet1['A1'].v !== undefined ? sheet1['A1'].v : '').trim().toLowerCase() : '';
+  return a1 === 'beds';
+}
+
+function parseCoStarWorkbook(wb, fileName) {
+  const sheet1 = wb.Sheets[wb.SheetNames[0]];
+  const cv = (ref) => { const c = sheet1[ref]; return c ? (c.v !== undefined ? c.v : '') : ''; };
+
+  const colLetters = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N'];
+  const headerMap = {};
+  colLetters.forEach(col => {
+    const h = String(cv(col + '1') || '').trim().toLowerCase();
+    if (h) headerMap[h] = col;
+  });
+
+  const bedsCol = headerMap['beds'];
+  const sfCol = headerMap['avg sf'];
+  const unitsCol = headerMap['# units'];
+  const askRentCol = headerMap['avg asking rent/unit'];
+  const askPsfCol = headerMap['avg asking rent/sf'];
+
+  if (!bedsCol || !sfCol || !unitsCol) { notify('Could not recognize CoStar Unit Mix format in ' + fileName, 'error'); return null; }
+
+  const unitTypes = [];
+  for (let r = 2; r <= 200; r++) {
+    const bedsRaw = String(cv(bedsCol + r) || '').trim();
+    if (!bedsRaw) break; // blank separator row before the "All X Beds"/"Totals" subtotal section
+    if (/^all\s|^total/i.test(bedsRaw)) break; // safety net if a file has no blank separator
+
+    const units = parseFloat(cv(unitsCol + r)) || 0;
+    const sqft = parseFloat(cv(sfCol + r)) || 0;
+    if (units === 0 || sqft === 0) continue;
+
+    const rent = askRentCol ? (parseFloat(cv(askRentCol + r)) || 0) : 0;
+    const psf = askPsfCol ? (parseFloat(cv(askPsfCol + r)) || null) : null;
+    const bedsNum = parseFloat(bedsRaw);
+    const unitType = (!isNaN(bedsNum) && bedsNum === 0) || /studio/i.test(bedsRaw)
+      ? 'Studio'
+      : (isNaN(bedsNum) ? bedsRaw : bedsNum + ' BR');
+
+    unitTypes.push({
+      unitType, units, sqft, marketRent: rent,
+      rentPerSqft: psf || (sqft > 0 && rent > 0 ? rent / sqft : null),
+      monthlyRents: {}, monthlyPerSF: {}
+    });
+  }
+
+  if (unitTypes.length === 0) { notify('No unit data found in CoStar file ' + fileName, 'error'); return null; }
+  const totalUnits = unitTypes.reduce((s, u) => s + u.units, 0);
+  const id = 'prop_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  return { id, name: '', address: '', market: '', submarket: '', totalUnits, fileName, unitTypes, monthHeaders: [] };
+}
+
+// ── CoStar Name Prompt Modal ──
+let costarPendingQueue = [];
+let costarModalActive = false;
+
+function processCostarQueue() {
+  if (costarModalActive || costarPendingQueue.length === 0) return;
+  costarModalActive = true;
+  document.getElementById('costarNameInput').value = '';
+  document.getElementById('costarNameModal').classList.add('show');
+  setTimeout(() => document.getElementById('costarNameInput').focus(), 50);
+}
+
+function confirmCostarName() {
+  const name = document.getElementById('costarNameInput').value.trim();
+  if (!name) { notify('Enter a property name', 'error'); return; }
+  const pending = costarPendingQueue.shift();
+  pending.name = name;
+  properties.push(pending);
+  notify(name + ' loaded from CoStar — ' + pending.unitTypes.length + ' floorplans', 'success');
+  renderPropertyCards();
+  closeCostarModal();
+}
+
+function cancelCostarName() {
+  costarPendingQueue.shift();
+  notify('CoStar upload discarded', 'error');
+  closeCostarModal();
+}
+
+function closeCostarModal() {
+  document.getElementById('costarNameModal').classList.remove('show');
+  costarModalActive = false;
+  if (costarPendingQueue.length > 0) processCostarQueue();
 }
 
 // ── Yardi Parser ──

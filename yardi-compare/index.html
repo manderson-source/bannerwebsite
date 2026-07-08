@@ -351,6 +351,9 @@
       <div class="section-gap">
         <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>12-Month Rent Trend (Weighted Avg)</div><div class="chart-container-lg"><canvas id="chartTrend"></canvas></div></div>
       </div>
+      <div class="section-gap">
+        <div class="card"><div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Rent Growth by Property (% from First Tracked Month)</div><div class="chart-container-lg"><canvas id="chartRentGrowth"></canvas></div></div>
+      </div>
     </div>
   </div>
 
@@ -1016,6 +1019,15 @@ function renderCharts() {
       }) },
       options: { ...defaultOpts, scales: { y: { ticks: { callback: v=>'$'+v.toLocaleString(), font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
     });
+
+    charts.rentGrowth = new Chart(document.getElementById('chartRentGrowth'), {
+      type: 'line', data: { labels: months, datasets: trendProps.map((p,pi) => {
+        const raw = months.map(m => { let tR=0,tU=0; p.unitTypes.forEach(u=>{if(u.monthlyRents[m]){tR+=u.monthlyRents[m]*u.units;tU+=u.units;}}); return tU>0?tR/tU:null; });
+        const growth = pctGrowthSeries(raw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
+        return { label: p.name, data: growth, borderColor: COMP_COLORS[pi%COMP_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+      }) },
+      options: { ...defaultOpts, scales: { y: { ticks: { callback: v=>(v>=0?'+':'')+v+'%', font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
+    });
   }
 }
 
@@ -1434,6 +1446,17 @@ async function injectNativeCharts(buffer, chartSpecs) {
   return await zip.generateAsync({ type: 'arraybuffer' });
 }
 
+// Converts a series of raw values into % growth relative to the first non-null value
+// (that first month becomes 0%). Nulls stay null so gaps don't get plotted/faked.
+function pctGrowthSeries(values) {
+  let baseline = null;
+  return values.map(v => {
+    if (v == null) return null;
+    if (baseline == null) { baseline = v; return 0; }
+    return baseline > 0 ? (v - baseline) / baseline : null;
+  });
+}
+
 function getWtdRentForMonth(prop, normType, month) {
   const fps = getFloorplansForType(prop, normType);
   let tR = 0, tU = 0;
@@ -1631,6 +1654,105 @@ async function exportToExcel() {
         });
       }
       row += 2;
+    });
+  }
+
+  // ── Sheet: Rent Growth (% change from first tracked month) ──
+  if (months.length > 0) {
+    const wsG = wb.addWorksheet('Rent Growth', { properties: { tabColor: { argb: '2E7D4F' } } });
+    const gColWidths = [{ width: 30 }]; months.forEach(() => gColWidths.push({ width: 12 }));
+    wsG.columns = gColWidths;
+
+    const gTitle = wsG.getCell('A1'); gTitle.value = 'Rent Growth — % Change from First Tracked Month'; gTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
+    const gDate = wsG.getCell('A2'); gDate.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); gDate.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+
+    let gRow = 4;
+    const lastColLG = _xlCol(1 + months.length);
+
+    // Part A: growth by bedroom type, comparing each comp against the others
+    const sectionA = wsG.getCell(gRow, 1); sectionA.value = 'By Bedroom Type — Across Comps'; sectionA.font = { name: 'Arial', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
+
+    BED_TYPES.forEach(bedType => {
+      const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
+      if (propsWithData.length === 0) return;
+
+      const titleC = wsG.getCell(gRow, 1); titleC.value = bedType + ' — Rent Growth by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; gRow++;
+      const hdrRowG = gRow;
+      xlWriteHdrRow(wsG, gRow, ['Property', ...months]); gRow++;
+
+      const seriesG = [];
+      propsWithData.forEach((comp, ci) => {
+        const fill = ci % 2 === 0 ? XL_ALT_GRAY : null;
+        const sty = xlBodyStyle(fill);
+        const rawVals = months.map(m => getWtdRentForMonth(comp, bedType, m));
+        const growthVals = pctGrowthSeries(rawVals);
+        xlWriteDataCell(wsG, gRow, 1, comp.name, { ...sty, alignment: { horizontal: 'left' } });
+        months.forEach((m, mi) => {
+          xlWriteDataCell(wsG, gRow, 2 + mi, growthVals[mi] != null ? Math.round(growthVals[mi] * 1000) / 1000 : '', sty, '0.0%');
+        });
+        seriesG.push({ nameRef: `'Rent Growth'!$A$${gRow}`, catRef: `'Rent Growth'!$B$${hdrRowG}:$${lastColLG}$${hdrRowG}`, valRef: `'Rent Growth'!$B$${gRow}:$${lastColLG}$${gRow}` });
+        gRow++;
+      });
+
+      if (seriesG.length > 0) {
+        xlChartSpecs.push({
+          sheetName: 'Rent Growth', type: 'line', title: bedType + ' — Rent Growth (%)', numFmt: '0.0%',
+          series: seriesG,
+          anchor: { fromCol: 2 + months.length, fromRow: hdrRowG - 1, toCol: 11 + months.length, toRow: hdrRowG - 1 + Math.max(14, seriesG.length + 4) }
+        });
+      }
+      gRow += 2;
+    });
+
+    // Part B: growth by property, each comp separated out by its own unit types
+    gRow += 1;
+    const sectionB = wsG.getCell(gRow, 1); sectionB.value = 'By Property — Each Comp by Unit Type'; sectionB.font = { name: 'Arial', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
+
+    const trendCompsG = comps.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
+    trendCompsG.forEach(prop => {
+      const propBedTypesG = BED_TYPES.filter(bt => {
+        const fps = getFloorplansForType(prop, bt);
+        return fps.length > 0 && months.some(m => getWtdRentForMonth(prop, bt, m) !== null);
+      });
+      if (propBedTypesG.length === 0) return;
+
+      const pTitleG = wsG.getCell(gRow, 1); pTitleG.value = prop.name + ' — Rent Growth by Unit Type'; pTitleG.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; gRow++;
+      const hdrRowPG = gRow;
+      xlWriteHdrRow(wsG, gRow, ['Unit Type', ...months]); gRow++;
+
+      const seriesPG = [];
+      propBedTypesG.forEach((bt, bi) => {
+        const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
+        const sty = xlBodyStyle(fill);
+        const rawVals = months.map(m => getWtdRentForMonth(prop, bt, m));
+        const growthVals = pctGrowthSeries(rawVals);
+        xlWriteDataCell(wsG, gRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+        months.forEach((m, mi) => {
+          xlWriteDataCell(wsG, gRow, 2 + mi, growthVals[mi] != null ? Math.round(growthVals[mi] * 1000) / 1000 : '', sty, '0.0%');
+        });
+        seriesPG.push({ nameRef: `'Rent Growth'!$A$${gRow}`, catRef: `'Rent Growth'!$B$${hdrRowPG}:$${lastColLG}$${hdrRowPG}`, valRef: `'Rent Growth'!$B$${gRow}:$${lastColLG}$${gRow}` });
+        gRow++;
+      });
+
+      // Overall weighted growth row, blended across all this property's unit types
+      const overallRaw = months.map(m => { let tR = 0, tU = 0; prop.unitTypes.forEach(u => { if (u.monthlyRents && u.monthlyRents[m] > 0) { tR += u.monthlyRents[m] * u.units; tU += u.units; } }); return tU > 0 ? tR / tU : null; });
+      const overallGrowth = pctGrowthSeries(overallRaw);
+      const allSty = xlBoldStyle(XL_AVG_TAN);
+      xlWriteDataCell(wsG, gRow, 1, 'Overall Wtd Avg', { ...allSty, alignment: { horizontal: 'left' } });
+      months.forEach((m, mi) => {
+        xlWriteDataCell(wsG, gRow, 2 + mi, overallGrowth[mi] != null ? Math.round(overallGrowth[mi] * 1000) / 1000 : '', allSty, '0.0%');
+      });
+      seriesPG.push({ nameRef: `'Rent Growth'!$A$${gRow}`, catRef: `'Rent Growth'!$B$${hdrRowPG}:$${lastColLG}$${hdrRowPG}`, valRef: `'Rent Growth'!$B$${gRow}:$${lastColLG}$${gRow}` });
+      gRow++;
+
+      if (seriesPG.length > 0) {
+        xlChartSpecs.push({
+          sheetName: 'Rent Growth', type: 'line', title: prop.name + ' — Rent Growth by Unit Type (%)', numFmt: '0.0%',
+          series: seriesPG,
+          anchor: { fromCol: 2 + months.length, fromRow: hdrRowPG - 1, toCol: 11 + months.length, toRow: hdrRowPG - 1 + Math.max(14, seriesPG.length + 4) }
+        });
+      }
+      gRow += 2;
     });
   }
 

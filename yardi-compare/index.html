@@ -100,6 +100,15 @@
     .btn-clear { background: transparent; color: var(--red); border: 1px solid var(--red); }
     .btn-clear:hover { background: var(--red-light); }
 
+    .toggle-row { display: flex; align-items: center; gap: 0.5rem; }
+    .toggle-row .toggle-label { font-family: var(--sans); font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.85); white-space: nowrap; }
+    .toggle-switch { position: relative; display: inline-block; width: 38px; height: 21px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: rgba(255,255,255,0.3); transition: 0.2s; border-radius: 21px; }
+    .toggle-slider:before { position: absolute; content: ""; height: 15px; width: 15px; left: 3px; bottom: 3px; background-color: white; transition: 0.2s; border-radius: 50%; }
+    .toggle-switch input:checked + .toggle-slider { background-color: var(--steel); }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(17px); }
+
     .subject-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
     .subject-form .full-width { grid-column: 1 / -1; }
     .form-group label { display: block; font-family: var(--sans); font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem; color: var(--text-mid); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -173,6 +182,13 @@
     </div>
   </div>
   <div class="header-actions">
+    <div class="toggle-row" title="When on, Alcove unit types are folded into Studio across the dashboard, tables, and Excel export. When off, they're kept as their own bedroom-type category.">
+      <span class="toggle-label">Group Alcoves w/ Studio</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="alcoveGroupToggle" onchange="toggleAlcoveGrouping(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
     <button class="btn btn-export" id="exportBtn" disabled onclick="exportToExcel()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export to Excel
@@ -412,6 +428,12 @@ const UNIT_TYPE_COLORS = ['#5a7da8','#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a
 let properties = [];
 let subjectProperty = null;
 let charts = {};
+let groupAlcovesWithStudios = false;
+
+function toggleAlcoveGrouping(checked) {
+  groupAlcovesWithStudios = checked;
+  if (subjectProperty && properties.length > 0) { renderDashboard(); renderTables(); }
+}
 
 // ── Unit Type Normalization ──
 function normalizeUnitType(raw) {
@@ -421,11 +443,13 @@ function normalizeUnitType(raw) {
   if (low === 'studio' || low === 'efficiency') return 'Studio';
   if (low.includes('studio')) return 'Studio';
 
-  // Check for alcove — keep separate
+  // Check for alcove — a 1 BR alcove is effectively a studio with a sleeping nook,
+  // so it can optionally be folded into Studio via the header toggle. A 2 BR alcove
+  // is a real 2-bedroom unit and always stays in its own category.
   if (low.includes('alcove')) {
-    if (low.includes('one') || low.includes('1')) return '1 BR Alcove';
+    if (low.includes('one') || low.includes('1')) return groupAlcovesWithStudios ? 'Studio' : '1 BR Alcove';
     if (low.includes('two') || low.includes('2')) return '2 BR Alcove';
-    return s;
+    return groupAlcovesWithStudios ? 'Studio' : s;
   }
 
   // Bedroom matching — extract count, ignore bath descriptions

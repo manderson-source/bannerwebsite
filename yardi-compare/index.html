@@ -1579,32 +1579,33 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, avgRow, 11, Math.round((aPSF - subjAvgPSF) * 100) / 100, avgSty, '$#,##0.00;[Red]-$#,##0.00');
   }
 
+  const sumChartH = Math.max(16, all.length + 4);
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: 'Avg Rent by Property', numFmt: '$#,##0',
     series: [{ name: 'Avg Rent', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$H$6:$H$${5 + all.length}` }],
-    anchor: { fromCol: 10, fromRow: 4, toCol: 19, toRow: 4 + Math.max(16, all.length + 4) }
+    anchor: { fromCol: 10, fromRow: 4, toCol: 19, toRow: 4 + sumChartH }
   });
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: '$/SF by Property', numFmt: '$#,##0.00',
     series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$I$6:$I$${5 + all.length}` }],
-    anchor: { fromCol: 20, fromRow: 4, toCol: 29, toRow: 4 + Math.max(16, all.length + 4) }
+    anchor: { fromCol: 21, fromRow: 4, toCol: 30, toRow: 4 + sumChartH }
   });
 
   if (comps.length > 0) {
-    const diffChartRow = 4 + Math.max(16, all.length + 4) + 2;
-    const diffChartH = 4 + Math.max(16, comps.length + 4);
+    const diffChartRow = 4 + sumChartH + 2;
+    const diffChartH = Math.max(16, comps.length + 4);
     const GREEN = '4CAF50', RED = 'E53935';
     const diffUnitColors = diffUnitVals.map(v => v >= 0 ? GREEN : RED);
     const diffPsfColors = diffPsfVals.map(v => v >= 0 ? GREEN : RED);
     xlChartSpecs.push({
       sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/Unit)', numFmt: '$#,##0',
       series: [{ name: 'Diff ($/Unit)', dPtColors: diffUnitColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$J$7:$J$${5 + all.length}` }],
-      anchor: { fromCol: 10, fromRow: diffChartRow, toCol: 19, toRow: diffChartRow + diffChartH - 4 }
+      anchor: { fromCol: 10, fromRow: diffChartRow, toCol: 19, toRow: diffChartRow + diffChartH }
     });
     xlChartSpecs.push({
       sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/SF)', numFmt: '$#,##0.00',
       series: [{ name: 'Diff ($/SF)', dPtColors: diffPsfColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$K$7:$K$${5 + all.length}` }],
-      anchor: { fromCol: 20, fromRow: diffChartRow, toCol: 29, toRow: diffChartRow + diffChartH - 4 }
+      anchor: { fromCol: 21, fromRow: diffChartRow, toCol: 30, toRow: diffChartRow + diffChartH }
     });
   }
 
@@ -1646,14 +1647,16 @@ async function exportToExcel() {
         row++;
       });
 
+      let chartBottom2 = row;
       if (series2.length > 0) {
+        chartBottom2 = hdrRow2 - 1 + Math.max(14, series2.length + 4);
         xlChartSpecs.push({
           sheetName: 'Rent Trend by Bedroom', type: 'line', title: bedType + ' — Rent Trend', numFmt: '$#,##0',
           series: series2,
-          anchor: { fromCol: 2 + months.length, fromRow: hdrRow2 - 1, toCol: 11 + months.length, toRow: hdrRow2 - 1 + Math.max(14, series2.length + 4) }
+          anchor: { fromCol: 3 + months.length, fromRow: hdrRow2 - 1, toCol: 12 + months.length, toRow: chartBottom2 }
         });
       }
-      row += 2;
+      row = Math.max(row, chartBottom2) + 2;
     });
   }
 
@@ -1694,14 +1697,16 @@ async function exportToExcel() {
         gRow++;
       });
 
+      let chartBottomG = gRow;
       if (seriesG.length > 0) {
+        chartBottomG = hdrRowG - 1 + Math.max(14, seriesG.length + 4);
         xlChartSpecs.push({
           sheetName: 'Rent Growth', type: 'line', title: bedType + ' — Rent Growth (%)', numFmt: '0.0%',
           series: seriesG,
-          anchor: { fromCol: 2 + months.length, fromRow: hdrRowG - 1, toCol: 11 + months.length, toRow: hdrRowG - 1 + Math.max(14, seriesG.length + 4) }
+          anchor: { fromCol: 3 + months.length, fromRow: hdrRowG - 1, toCol: 12 + months.length, toRow: chartBottomG }
         });
       }
-      gRow += 2;
+      gRow = Math.max(gRow, chartBottomG) + 2;
     });
 
     // Part B: growth by property, each comp separated out by its own unit types
@@ -1745,14 +1750,16 @@ async function exportToExcel() {
       seriesPG.push({ nameRef: `'Rent Growth'!$A$${gRow}`, catRef: `'Rent Growth'!$B$${hdrRowPG}:$${lastColLG}$${hdrRowPG}`, valRef: `'Rent Growth'!$B$${gRow}:$${lastColLG}$${gRow}` });
       gRow++;
 
+      let chartBottomPG = gRow;
       if (seriesPG.length > 0) {
+        chartBottomPG = hdrRowPG - 1 + Math.max(14, seriesPG.length + 4);
         xlChartSpecs.push({
           sheetName: 'Rent Growth', type: 'line', title: prop.name + ' — Rent Growth by Unit Type (%)', numFmt: '0.0%',
           series: seriesPG,
-          anchor: { fromCol: 2 + months.length, fromRow: hdrRowPG - 1, toCol: 11 + months.length, toRow: hdrRowPG - 1 + Math.max(14, seriesPG.length + 4) }
+          anchor: { fromCol: 3 + months.length, fromRow: hdrRowPG - 1, toCol: 12 + months.length, toRow: chartBottomPG }
         });
       }
-      gRow += 2;
+      gRow = Math.max(gRow, chartBottomPG) + 2;
     });
   }
 
@@ -1793,14 +1800,16 @@ async function exportToExcel() {
         row++;
       });
 
+      let chartBottom3 = row;
       if (series3.length > 0) {
+        chartBottom3 = hdrRow3 - 1 + Math.max(14, series3.length + 4);
         xlChartSpecs.push({
           sheetName: 'PSF Trend by Bedroom', type: 'line', title: bedType + ' — $/SF Trend', numFmt: '$#,##0.00',
           series: series3,
-          anchor: { fromCol: 2 + months.length, fromRow: hdrRow3 - 1, toCol: 11 + months.length, toRow: hdrRow3 - 1 + Math.max(14, series3.length + 4) }
+          anchor: { fromCol: 3 + months.length, fromRow: hdrRow3 - 1, toCol: 12 + months.length, toRow: chartBottom3 }
         });
       }
-      row += 2;
+      row = Math.max(row, chartBottom3) + 2;
     });
   }
 
@@ -1902,13 +1911,14 @@ async function exportToExcel() {
         r++;
       }
 
+      const chartBottomR = dataStartRow - 3 + Math.max(12, propsWithData.length + 4);
       xlChartSpecs.push({
         sheetName, type: 'bar', title: bedType + ' — Wtd Avg Rent (sorted by ' + chartLabel + ')', numFmt: '$#,##0',
         series: [{ name: 'Wtd Avg Rent', catRef: `'${sheetName}'!$A$${dataStartRow}:$A$${r - 1}`, valRef: `'${sheetName}'!$C$${dataStartRow}:$C$${r - 1}` }],
-        anchor: { fromCol: 8, fromRow: dataStartRow - 3, toCol: 16, toRow: dataStartRow - 3 + Math.max(12, propsWithData.length + 4) }
+        anchor: { fromCol: 9, fromRow: dataStartRow - 3, toCol: 17, toRow: chartBottomR }
       });
 
-      r += 2;
+      r = Math.max(r, chartBottomR) + 2;
     });
   }
 
@@ -1972,13 +1982,14 @@ async function exportToExcel() {
       xlWriteDataCell(wsP, pRow, 3 + months.length, { formula: 'IF(OR(' + oLastCol + pRow + '="",' + oFirstCol + pRow + '="",' + oFirstCol + pRow + '=0),"",(' + oLastCol + pRow + '-' + oFirstCol + pRow + ')/' + oFirstCol + pRow + ')' }, allRentSty, '0.0%');
       rentSeriesRows.push(pRow);
 
+      const rentChartBottom = rentHdrRow - 2 + Math.max(14, rentSeriesRows.length + 4);
       xlChartSpecs.push({
         sheetName, type: 'line', title: 'Monthly Rent by Unit Type', numFmt: '$#,##0',
         series: rentSeriesRows.map(r => ({ nameRef: `'${sheetName}'!$A$${r}`, catRef: `'${sheetName}'!$B$${rentHdrRow}:$${rentLastColL}$${rentHdrRow}`, valRef: `'${sheetName}'!$B$${r}:$${rentLastColL}$${r}` })),
-        anchor: { fromCol: 4 + months.length, fromRow: rentHdrRow - 2, toCol: 13 + months.length, toRow: rentHdrRow - 2 + Math.max(14, rentSeriesRows.length + 4) }
+        anchor: { fromCol: 5 + months.length, fromRow: rentHdrRow - 2, toCol: 14 + months.length, toRow: rentChartBottom }
       });
 
-      pRow += 3;
+      pRow = Math.max(pRow, rentChartBottom) + 3;
 
       // $/SF section
       const psfBedTypes = BED_TYPES.filter(bt => {
@@ -2022,7 +2033,7 @@ async function exportToExcel() {
         xlChartSpecs.push({
           sheetName, type: 'line', title: 'Monthly $/SF by Unit Type', numFmt: '$#,##0.00',
           series: psfSeriesRows.map(r => ({ nameRef: `'${sheetName}'!$A$${r}`, catRef: `'${sheetName}'!$B$${psfHdrRow}:$${psfLastColL}$${psfHdrRow}`, valRef: `'${sheetName}'!$B$${r}:$${psfLastColL}$${r}` })),
-          anchor: { fromCol: 4 + months.length, fromRow: psfHdrRow - 2, toCol: 13 + months.length, toRow: psfHdrRow - 2 + Math.max(14, psfSeriesRows.length + 4) }
+          anchor: { fromCol: 5 + months.length, fromRow: psfHdrRow - 2, toCol: 14 + months.length, toRow: psfHdrRow - 2 + Math.max(14, psfSeriesRows.length + 4) }
         });
       }
     });
@@ -2085,7 +2096,7 @@ async function exportToExcel() {
         { name: 'Subject', xValRef: `'Bubble Analysis'!$D$${bubSubjStart}:$D$${bubSubjEnd}`, yValRef: `'Bubble Analysis'!$E$${bubSubjStart}:$E$${bubSubjEnd}`, bubbleSizeRef: `'Bubble Analysis'!$F$${bubSubjStart}:$F$${bubSubjEnd}`, color: '48C4E4', alpha: 'D9' }
       ],
       trendOnFirst: true,
-      anchor: { fromCol: 7, fromRow: 3, toCol: 20, toRow: 28 }
+      anchor: { fromCol: 8, fromRow: 3, toCol: 21, toRow: 28 }
     });
   }
 

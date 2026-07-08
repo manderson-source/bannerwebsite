@@ -219,6 +219,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       Tables
     </div>
+    <div class="tab" onclick="switchTab('rentgrowth')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Rent Growth
+    </div>
     <div class="tab" onclick="switchTab('saved')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Saved
@@ -386,6 +390,23 @@
     </div>
   </div>
 
+  <!-- RENT GROWTH TAB -->
+  <div class="tab-content" id="tab-rentgrowth">
+    <div id="rentGrowthEmpty" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <p>Upload Yardi files with monthly rent history to see rent growth (%).</p>
+    </div>
+    <div id="rentGrowthContent" style="display:none;">
+      <div class="section-label" style="margin-bottom:0.5rem;">By Bedroom Type — Across Comps</div>
+      <p class="help-note" style="margin-bottom:0.85rem;">% rent growth by month, indexed to each comp's first tracked month, for a given bedroom type.</p>
+      <div class="grid-2" id="rentGrowthByType"></div>
+
+      <div class="section-label" style="margin:1.75rem 0 0.5rem;">By Property — Each Comp by Unit Type</div>
+      <p class="help-note" style="margin-bottom:0.85rem;">% rent growth by month for one comp's own floorplans, plus its overall weighted average.</p>
+      <div class="grid-2" id="rentGrowthByProperty"></div>
+    </div>
+  </div>
+
   <!-- SAVED TAB -->
   <div class="tab-content" id="tab-saved">
     <div class="card" style="margin-bottom:1rem;">
@@ -535,12 +556,13 @@ function getAggregatedForType(prop, normType) {
 
 // ── Tab Switching ──
 function switchTab(tab) {
-  const tabNames = ['setup','dashboard','tables','saved'];
+  const tabNames = ['setup','dashboard','tables','rentgrowth','saved'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabNames[i] === tab));
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'dashboard') renderDashboard();
   if (tab === 'tables') renderTables();
+  if (tab === 'rentgrowth') renderRentGrowth();
   if (tab === 'saved') renderSavedList();
 }
 
@@ -830,6 +852,12 @@ function clearAll() {
   document.getElementById('dashboardEmpty').style.display = 'block';
   document.getElementById('tablesContent').style.display = 'none';
   document.getElementById('tablesEmpty').style.display = 'block';
+  document.getElementById('rentGrowthContent').style.display = 'none';
+  document.getElementById('rentGrowthEmpty').style.display = 'block';
+  document.getElementById('rentGrowthByType').innerHTML = '';
+  document.getElementById('rentGrowthByProperty').innerHTML = '';
+  dynamicGrowthCharts.forEach(c => c.destroy());
+  dynamicGrowthCharts = [];
   destroyCharts();
 }
 
@@ -1150,6 +1178,82 @@ function renderCharts() {
       options: { ...defaultOpts, scales: { y: { ticks: { callback: v=>(v>=0?'+':'')+v+'%', font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } }
     });
   }
+}
+
+// ── Rent Growth (% change from first tracked month) ──
+let dynamicGrowthCharts = [];
+function renderRentGrowth() {
+  dynamicGrowthCharts.forEach(c => c.destroy());
+  dynamicGrowthCharts = [];
+  const byTypeEl = document.getElementById('rentGrowthByType');
+  const byPropEl = document.getElementById('rentGrowthByProperty');
+  byTypeEl.innerHTML = '';
+  byPropEl.innerHTML = '';
+
+  const trendComps = properties.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
+  if (!subjectProperty || properties.length === 0 || trendComps.length === 0) {
+    document.getElementById('rentGrowthContent').style.display = 'none';
+    document.getElementById('rentGrowthEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('rentGrowthContent').style.display = 'block';
+  document.getElementById('rentGrowthEmpty').style.display = 'none';
+
+  const months = trendComps[0].monthHeaders;
+  const chartFont = { family: "Calibri, 'Segoe UI', sans-serif" };
+  const defaultOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, ...chartFont } } } } };
+  const growthOpts = { ...defaultOpts, scales: { y: { ticks: { callback: v => (v >= 0 ? '+' : '') + v + '%', font: chartFont } }, x: { ticks: { font: { ...chartFont, size: 10 } } } } };
+
+  function makeCard(title, canvasId) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>${esc(title)}</div><div class="chart-container"><canvas id="${canvasId}"></canvas></div>`;
+    return card;
+  }
+
+  // Section A: growth by bedroom type, one chart per type, one line per comp
+  const normTypes = getNormalizedBedroomTypes(trendComps);
+  normTypes.forEach((bedType, ti) => {
+    const propsWithData = trendComps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
+    if (propsWithData.length === 0) return;
+
+    const canvasId = 'chartGrowthBed' + ti;
+    byTypeEl.appendChild(makeCard(bedType + ' — Rent Growth', canvasId));
+
+    const chart = new Chart(document.getElementById(canvasId), {
+      type: 'line', data: { labels: months, datasets: propsWithData.map((p, pi) => {
+        const raw = months.map(m => getWtdRentForMonth(p, bedType, m));
+        const growth = pctGrowthSeries(raw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
+        return { label: p.name, data: growth, borderColor: COMP_COLORS[pi % COMP_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+      }) },
+      options: growthOpts
+    });
+    dynamicGrowthCharts.push(chart);
+  });
+
+  // Section B: growth by property, one chart per comp, one line per its own unit types
+  trendComps.forEach((prop, pi) => {
+    const propBedTypes = getNormalizedBedroomTypes([prop]).filter(bt => {
+      const fps = getFloorplansForType(prop, bt);
+      return fps.length > 0 && months.some(m => getWtdRentForMonth(prop, bt, m) !== null);
+    });
+    if (propBedTypes.length === 0) return;
+
+    const canvasId = 'chartGrowthProp' + pi;
+    byPropEl.appendChild(makeCard(prop.name + ' — Rent Growth by Unit Type', canvasId));
+
+    const datasets = propBedTypes.map((bt, bi) => {
+      const raw = months.map(m => getWtdRentForMonth(prop, bt, m));
+      const growth = pctGrowthSeries(raw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
+      return { label: bt, data: growth, borderColor: UNIT_TYPE_COLORS[bi % UNIT_TYPE_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+    });
+    const overallRaw = months.map(m => { let tR = 0, tU = 0; prop.unitTypes.forEach(u => { if (u.monthlyRents && u.monthlyRents[m] > 0) { tR += u.monthlyRents[m] * u.units; tU += u.units; } }); return tU > 0 ? tR / tU : null; });
+    const overallGrowth = pctGrowthSeries(overallRaw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
+    datasets.push({ label: 'Overall Wtd Avg', data: overallGrowth, borderColor: '#1a1a2e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 3, borderDash: [4, 3] });
+
+    const chart = new Chart(document.getElementById(canvasId), { type: 'line', data: { labels: months, datasets }, options: growthOpts });
+    dynamicGrowthCharts.push(chart);
+  });
 }
 
 // ── Tables ──

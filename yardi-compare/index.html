@@ -1699,7 +1699,7 @@ async function exportToExcel() {
   // ── Sheet 5 & 5b: Bedroom Comparison (sorted high-to-low, averages pinned at bottom) ──
   function buildBedroomComparisonSheet(sheetName, tabColor, sortKey, chartLabel) {
     const ws = wb.addWorksheet(sheetName, { properties: { tabColor: { argb: tabColor } } });
-    ws.columns = [{ width: 30 }, { width: 10 }, { width: 12 }, { width: 16 }, { width: 12 }, { width: 16 }, { width: 16 }];
+    ws.columns = [{ width: 30 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 13 }, { width: 13 }, { width: 16 }];
 
     const title = ws.getCell('A1'); title.value = 'Rent & SF Comparison by Bedroom Type — Sorted by ' + chartLabel; title.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
     const dateC = ws.getCell('A2'); dateC.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateC.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
@@ -1709,7 +1709,7 @@ async function exportToExcel() {
       let propsWithData = all.filter(p => getAggregatedForType(p, bedType));
       if (propsWithData.length === 0) return;
 
-      // Sort high-to-low on the chosen metric; averages/diffs are appended after, independent of order.
+      // Sort high-to-low on the chosen metric; the COMP AVERAGE row is appended after, independent of order.
       propsWithData = propsWithData.slice().sort((a, b) => {
         const aggA = getAggregatedForType(a, bedType), aggB = getAggregatedForType(b, bedType);
         return (aggB[sortKey] || 0) - (aggA[sortKey] || 0);
@@ -1717,10 +1717,9 @@ async function exportToExcel() {
 
       const sec = ws.getCell(r, 1); sec.value = bedType; sec.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; r++;
 
-      xlWriteHdrRow(ws, r, ['Property', 'Units', 'Avg SF', 'Wtd Avg Rent', '$/SF', 'Diff vs Subject ($)', 'Diff vs Subject (%)']); r++;
+      xlWriteHdrRow(ws, r, ['Property', 'SF', 'Rent', '$/SF', 'Occupancy', 'Unit Count', '% of Total Units']); r++;
 
       const dataStartRow = r;
-      let subjRow = null;
       const compRows = [];
 
       propsWithData.forEach((p, pi) => {
@@ -1729,57 +1728,37 @@ async function exportToExcel() {
         const fill = isS ? XL_SUBJ_BLUE : (pi % 2 === 0 ? XL_ALT_GRAY : null);
         const sty = isS ? xlBoldStyle(fill) : xlBodyStyle(fill);
         const styL = { ...sty, alignment: { horizontal: 'left' } };
+        const pOcc = isS ? (subj.occupancy != null ? subj.occupancy : null) : (p.occupancy != null ? p.occupancy : null);
+        const propTotal = p.totalUnits || 1;
 
         xlWriteDataCell(ws, r, 1, p.name + (isS ? ' (Subject)' : ''), styL);
-        xlWriteDataCell(ws, r, 2, agg.units, sty, '#,##0');
-        xlWriteDataCell(ws, r, 3, Math.round(agg.sqft), sty, '#,##0');
-        xlWriteDataCell(ws, r, 4, Math.round(agg.marketRent), sty, '$#,##0');
-        xlWriteDataCell(ws, r, 5, Math.round(agg.rentPerSqft * 100) / 100, sty, '$#,##0.00');
+        xlWriteDataCell(ws, r, 2, Math.round(agg.sqft), sty, '#,##0');
+        xlWriteDataCell(ws, r, 3, Math.round(agg.marketRent), sty, '$#,##0');
+        xlWriteDataCell(ws, r, 4, Math.round(agg.rentPerSqft * 100) / 100, sty, '$#,##0.00');
+        xlWriteDataCell(ws, r, 5, pOcc != null ? pOcc / 100 : '', sty, '0.0%');
+        xlWriteDataCell(ws, r, 6, Math.round(agg.units), sty, '#,##0');
+        xlWriteDataCell(ws, r, 7, agg.units / propTotal, sty, '0.0%');
 
-        if (isS) { subjRow = r; } else { compRows.push(r); }
+        if (!isS) compRows.push(r);
         r++;
       });
-
-      // Diff formulas reference the subject's actual row, wherever sorting placed it.
-      compRows.forEach(cr => {
-        const sty = xlBodyStyle(null);
-        if (subjRow) {
-          const subjRentCell = 'D' + subjRow;
-          ws.getCell(cr, 6).value = { formula: 'D' + cr + '-' + subjRentCell };
-          ws.getCell(cr, 7).value = { formula: 'IF(' + subjRentCell + '=0,"",F' + cr + '/' + subjRentCell + ')' };
-        } else {
-          ws.getCell(cr, 6).value = '—';
-          ws.getCell(cr, 7).value = '—';
-        }
-        ws.getCell(cr, 6).numFmt = '$#,##0';
-        ws.getCell(cr, 7).numFmt = '0.0%';
-      });
-      if (subjRow) {
-        xlWriteDataCell(ws, subjRow, 6, '—', xlBoldStyle(XL_SUBJ_BLUE));
-        xlWriteDataCell(ws, subjRow, 7, '—', xlBoldStyle(XL_SUBJ_BLUE));
-      }
 
       if (compRows.length > 0) {
         const avgSty = xlBoldStyle(XL_AVG_TAN);
         const avgStyL = { ...avgSty, alignment: { horizontal: 'left' } };
         xlWriteDataCell(ws, r, 1, 'COMP AVERAGE', avgStyL);
         xlWriteDataCell(ws, r, 2, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'B' + cr).join(',') + '),0)' }, avgSty, '#,##0');
-        xlWriteDataCell(ws, r, 3, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'C' + cr).join(',') + '),0)' }, avgSty, '#,##0');
-        xlWriteDataCell(ws, r, 4, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'D' + cr).join(',') + '),0)' }, avgSty, '$#,##0');
-        xlWriteDataCell(ws, r, 5, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'E' + cr).join(',') + '),2)' }, avgSty, '$#,##0.00');
-        if (subjRow) {
-          xlWriteDataCell(ws, r, 6, { formula: 'D' + r + '-D' + subjRow }, avgSty, '$#,##0');
-          xlWriteDataCell(ws, r, 7, { formula: 'IF(D' + subjRow + '=0,"",F' + r + '/D' + subjRow + ')' }, avgSty, '0.0%');
-        } else {
-          xlWriteDataCell(ws, r, 6, '—', avgSty);
-          xlWriteDataCell(ws, r, 7, '—', avgSty);
-        }
+        xlWriteDataCell(ws, r, 3, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'C' + cr).join(',') + '),0)' }, avgSty, '$#,##0');
+        xlWriteDataCell(ws, r, 4, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'D' + cr).join(',') + '),2)' }, avgSty, '$#,##0.00');
+        xlWriteDataCell(ws, r, 5, { formula: 'AVERAGE(' + compRows.map(cr => 'E' + cr).join(',') + ')' }, avgSty, '0.0%');
+        xlWriteDataCell(ws, r, 6, { formula: 'ROUND(AVERAGE(' + compRows.map(cr => 'F' + cr).join(',') + '),0)' }, avgSty, '#,##0');
+        xlWriteDataCell(ws, r, 7, { formula: 'AVERAGE(' + compRows.map(cr => 'G' + cr).join(',') + ')' }, avgSty, '0.0%');
         r++;
       }
 
       xlChartSpecs.push({
         sheetName, type: 'bar', title: bedType + ' — Wtd Avg Rent (sorted by ' + chartLabel + ')', numFmt: '$#,##0',
-        series: [{ name: 'Wtd Avg Rent', catRef: `'${sheetName}'!$A$${dataStartRow}:$A$${r - 1}`, valRef: `'${sheetName}'!$D$${dataStartRow}:$D$${r - 1}` }],
+        series: [{ name: 'Wtd Avg Rent', catRef: `'${sheetName}'!$A$${dataStartRow}:$A$${r - 1}`, valRef: `'${sheetName}'!$C$${dataStartRow}:$C$${r - 1}` }],
         anchor: { fromCol: 8, fromRow: dataStartRow - 3, toCol: 16, toRow: dataStartRow - 3 + Math.max(12, propsWithData.length + 4) }
       });
 

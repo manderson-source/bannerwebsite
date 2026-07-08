@@ -185,7 +185,7 @@
     <div class="toggle-row" title="When on, Alcove unit types are folded into Studio across the dashboard, tables, and Excel export. When off, they're kept as their own bedroom-type category.">
       <span class="toggle-label">Group Alcoves w/ Studio</span>
       <label class="toggle-switch">
-        <input type="checkbox" id="alcoveGroupToggle" onchange="toggleAlcoveGrouping(this.checked)">
+        <input type="checkbox" id="alcoveGroupToggle" checked onchange="toggleAlcoveGrouping(this.checked)">
         <span class="toggle-slider"></span>
       </label>
     </div>
@@ -428,7 +428,7 @@ const UNIT_TYPE_COLORS = ['#5a7da8','#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a
 let properties = [];
 let subjectProperty = null;
 let charts = {};
-let groupAlcovesWithStudios = false;
+let groupAlcovesWithStudios = true;
 
 function toggleAlcoveGrouping(checked) {
   groupAlcovesWithStudios = checked;

@@ -1955,16 +1955,21 @@ async function exportToExcel() {
     xlWriteDataCell(ws1, avgRow, 11, Math.round((aPSF - subjAvgPSF) * 100) / 100, avgSty, '$#,##0.00;[Red]-$#,##0.00');
   }
 
+  // Chart columns are derived from the table's actual width (sumHeaders.length) plus a
+  // 1-column gap, instead of a hardcoded offset — hardcoding it previously caused the
+  // charts to start inside the table once more columns (Diff vs Subject) were added.
+  const sumChartCol1 = sumHeaders.length + 1;
+  const sumChartCol2 = sumChartCol1 + 11;
   const sumChartH = Math.max(16, all.length + 4);
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: 'Avg Rent by Property', numFmt: '$#,##0',
     series: [{ name: 'Avg Rent', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$H$6:$H$${5 + all.length}` }],
-    anchor: { fromCol: 10, fromRow: 4, toCol: 19, toRow: 4 + sumChartH }
+    anchor: { fromCol: sumChartCol1, fromRow: 4, toCol: sumChartCol1 + 9, toRow: 4 + sumChartH }
   });
   xlChartSpecs.push({
     sheetName: 'Summary', type: 'bar', title: '$/SF by Property', numFmt: '$#,##0.00',
     series: [{ name: '$/SF', catRef: `'Summary'!$B$6:$B$${5 + all.length}`, valRef: `'Summary'!$I$6:$I$${5 + all.length}` }],
-    anchor: { fromCol: 21, fromRow: 4, toCol: 30, toRow: 4 + sumChartH }
+    anchor: { fromCol: sumChartCol2, fromRow: 4, toCol: sumChartCol2 + 9, toRow: 4 + sumChartH }
   });
 
   if (comps.length > 0) {
@@ -1976,12 +1981,12 @@ async function exportToExcel() {
     xlChartSpecs.push({
       sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/Unit)', numFmt: '$#,##0',
       series: [{ name: 'Diff ($/Unit)', dPtColors: diffUnitColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$J$7:$J$${5 + all.length}` }],
-      anchor: { fromCol: 10, fromRow: diffChartRow, toCol: 19, toRow: diffChartRow + diffChartH }
+      anchor: { fromCol: sumChartCol1, fromRow: diffChartRow, toCol: sumChartCol1 + 9, toRow: diffChartRow + diffChartH }
     });
     xlChartSpecs.push({
       sheetName: 'Summary', type: 'vbar', noLegend: true, title: 'Rent Premium / Discount vs Subject ($/SF)', numFmt: '$#,##0.00',
       series: [{ name: 'Diff ($/SF)', dPtColors: diffPsfColors, catRef: `'Summary'!$B$7:$B$${5 + all.length}`, valRef: `'Summary'!$K$7:$K$${5 + all.length}` }],
-      anchor: { fromCol: 21, fromRow: diffChartRow, toCol: 30, toRow: diffChartRow + diffChartH }
+      anchor: { fromCol: sumChartCol2, fromRow: diffChartRow, toCol: sumChartCol2 + 9, toRow: diffChartRow + diffChartH }
     });
   }
 

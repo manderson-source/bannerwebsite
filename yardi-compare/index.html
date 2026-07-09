@@ -1221,11 +1221,14 @@ function renderRentGrowth() {
     byTypeEl.appendChild(makeCard(bedType + ' — Rent Growth', canvasId));
 
     const chart = new Chart(document.getElementById(canvasId), {
-      type: 'line', data: { labels: months, datasets: propsWithData.map((p, pi) => {
-        const raw = months.map(m => getWtdRentForMonth(p, bedType, m));
-        const growth = pctGrowthSeries(raw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
-        return { label: p.name, data: growth, borderColor: COMP_COLORS[pi % COMP_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
-      }) },
+      type: 'line', data: { labels: months, datasets: [
+        ...propsWithData.map((p, pi) => {
+          const raw = months.map(m => getWtdRentForMonth(p, bedType, m));
+          const growth = pctGrowthSeries(raw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
+          return { label: p.name, data: growth, borderColor: COMP_COLORS[pi % COMP_COLORS.length], backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 };
+        }),
+        zeroLineDataset(months)
+      ] },
       options: growthOpts
     });
     dynamicGrowthCharts.push(chart);
@@ -1250,10 +1253,15 @@ function renderRentGrowth() {
     const overallRaw = months.map(m => { let tR = 0, tU = 0; prop.unitTypes.forEach(u => { if (u.monthlyRents && u.monthlyRents[m] > 0) { tR += u.monthlyRents[m] * u.units; tU += u.units; } }); return tU > 0 ? tR / tU : null; });
     const overallGrowth = pctGrowthSeries(overallRaw).map(g => g != null ? Math.round(g * 1000) / 10 : null);
     datasets.push({ label: 'Overall Wtd Avg', data: overallGrowth, borderColor: '#1a1a2e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 3, borderDash: [4, 3] });
+    datasets.push(zeroLineDataset(months));
 
     const chart = new Chart(document.getElementById(canvasId), { type: 'line', data: { labels: months, datasets }, options: growthOpts });
     dynamicGrowthCharts.push(chart);
   });
+}
+
+function zeroLineDataset(months) {
+  return { label: '0%', data: months.map(() => 0), borderColor: '#8a8a9a', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, tension: 0, order: -1 };
 }
 
 // ── Tables ──
@@ -1392,18 +1400,18 @@ function renderUnitTypeTables() {
 }
 
 // ── Export (ExcelJS — styled, 4-sheet format) ──
-const XL_NAVY = { argb: 'FF1B2A4A' };
-const XL_STEEL = { argb: 'FF4A6FA5' };
+const XL_NAVY = { argb: 'FF13566B' };
+const XL_STEEL = { argb: 'FF1E83A1' };
 const XL_WHITE = { argb: 'FFFFFFFF' };
-const XL_SUBJ_BLUE = { argb: 'FFB8CCE4' };
+const XL_SUBJ_BLUE = { argb: 'FFDDEBF7' };
 const XL_ALT_GRAY = { argb: 'FFF2F2F2' };
 const XL_AVG_TAN = { argb: 'FFE8E0D0' };
 const XL_BORDER = { style: 'thin', color: { argb: 'FFD0D0D0' } };
 const XL_BORDERS = { top: XL_BORDER, bottom: XL_BORDER, left: XL_BORDER, right: XL_BORDER };
 
-function xlHdrStyle() { return { font: { name: 'Arial', bold: true, color: XL_WHITE, size: 10 }, fill: { type: 'pattern', pattern: 'solid', fgColor: XL_NAVY }, alignment: { horizontal: 'center', wrapText: true }, border: XL_BORDERS }; }
-function xlBodyStyle(fill) { return { font: { name: 'Arial', size: 10 }, fill: fill ? { type: 'pattern', pattern: 'solid', fgColor: fill } : undefined, border: XL_BORDERS, alignment: { horizontal: 'center' } }; }
-function xlBoldStyle(fill) { const s = xlBodyStyle(fill); s.font = { name: 'Arial', size: 10, bold: true }; return s; }
+function xlHdrStyle() { return { font: { name: 'Calibri', bold: true, color: XL_WHITE, size: 10 }, fill: { type: 'pattern', pattern: 'solid', fgColor: XL_NAVY }, alignment: { horizontal: 'center', wrapText: true }, border: XL_BORDERS }; }
+function xlBodyStyle(fill) { return { font: { name: 'Calibri', size: 10 }, fill: fill ? { type: 'pattern', pattern: 'solid', fgColor: fill } : undefined, border: XL_BORDERS, alignment: { horizontal: 'center' } }; }
+function xlBoldStyle(fill) { const s = xlBodyStyle(fill); s.font = { name: 'Calibri', size: 10, bold: true }; return s; }
 function xlApplyStyle(cell, style) {
   if (style.font) cell.font = style.font;
   if (style.fill) cell.fill = style.fill;
@@ -1729,9 +1737,9 @@ async function exportToExcel() {
   const ws1 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: '1B2A4A' } } });
   ws1.columns = [{ width: 5 }, { width: 30 }, { width: 36 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 11 }, { width: 20 }, { width: 16 }, { width: 18 }, { width: 20 }];
 
-  const titleCell = ws1.getCell('A1'); titleCell.value = 'Rent Comp Analysis'; titleCell.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
-  const subCell = ws1.getCell('A2'); subCell.value = 'Subject: ' + subj.name; subCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
-  const dateCell = ws1.getCell('A3'); dateCell.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateCell.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+  const titleCell = ws1.getCell('A1'); titleCell.value = 'Rent Comp Analysis'; titleCell.font = { name: 'Times New Roman', size: 14, bold: true, color: XL_NAVY };
+  const subCell = ws1.getCell('A2'); subCell.value = 'Subject: ' + subj.name; subCell.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } };
+  const dateCell = ws1.getCell('A3'); dateCell.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateCell.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } };
 
   const sumHeaders = ['#', 'Property', 'Address', 'Year Built', 'Occupancy', 'Units', 'Avg SF', 'Most Recent Avg Rent', 'Most Recent $/SF', 'Diff vs Subject ($/Unit)', 'Diff vs Subject ($/SF)'];
   xlWriteHdrRow(ws1, 5, sumHeaders);
@@ -1846,7 +1854,7 @@ async function exportToExcel() {
       const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
       if (propsWithData.length === 0) return;
 
-      const titleC = ws2.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg Rent by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
+      const titleC = ws2.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg Rent by Month'; titleC.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; row++;
 
       const headers = ['Property', ...months];
       const hdrRow2 = row;
@@ -1891,20 +1899,20 @@ async function exportToExcel() {
     const gColWidths = [{ width: 30 }]; months.forEach(() => gColWidths.push({ width: 12 }));
     wsG.columns = gColWidths;
 
-    const gTitle = wsG.getCell('A1'); gTitle.value = 'Rent Growth — % Change from First Tracked Month'; gTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
-    const gDate = wsG.getCell('A2'); gDate.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); gDate.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+    const gTitle = wsG.getCell('A1'); gTitle.value = 'Rent Growth — % Change from First Tracked Month'; gTitle.font = { name: 'Times New Roman', size: 14, bold: true, color: XL_NAVY };
+    const gDate = wsG.getCell('A2'); gDate.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); gDate.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } };
 
     let gRow = 4;
     const lastColLG = _xlCol(1 + months.length);
 
     // Part A: growth by bedroom type, comparing each comp against the others
-    const sectionA = wsG.getCell(gRow, 1); sectionA.value = 'By Bedroom Type — Across Comps'; sectionA.font = { name: 'Arial', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
+    const sectionA = wsG.getCell(gRow, 1); sectionA.value = 'By Bedroom Type — Across Comps'; sectionA.font = { name: 'Times New Roman', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
 
     BED_TYPES.forEach(bedType => {
       const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdRentForMonth(c, bedType, m) !== null); });
       if (propsWithData.length === 0) return;
 
-      const titleC = wsG.getCell(gRow, 1); titleC.value = bedType + ' — Rent Growth by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; gRow++;
+      const titleC = wsG.getCell(gRow, 1); titleC.value = bedType + ' — Rent Growth by Month'; titleC.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; gRow++;
       const hdrRowG = gRow;
       xlWriteHdrRow(wsG, gRow, ['Property', ...months]); gRow++;
 
@@ -1936,7 +1944,7 @@ async function exportToExcel() {
 
     // Part B: growth by property, each comp separated out by its own unit types
     gRow += 1;
-    const sectionB = wsG.getCell(gRow, 1); sectionB.value = 'By Property — Each Comp by Unit Type'; sectionB.font = { name: 'Arial', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
+    const sectionB = wsG.getCell(gRow, 1); sectionB.value = 'By Property — Each Comp by Unit Type'; sectionB.font = { name: 'Times New Roman', size: 13, bold: true, color: XL_NAVY }; gRow += 2;
 
     const trendCompsG = comps.filter(p => p.monthHeaders && p.monthHeaders.length > 0);
     trendCompsG.forEach(prop => {
@@ -1946,7 +1954,7 @@ async function exportToExcel() {
       });
       if (propBedTypesG.length === 0) return;
 
-      const pTitleG = wsG.getCell(gRow, 1); pTitleG.value = prop.name + ' — Rent Growth by Unit Type'; pTitleG.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; gRow++;
+      const pTitleG = wsG.getCell(gRow, 1); pTitleG.value = prop.name + ' — Rent Growth by Unit Type'; pTitleG.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; gRow++;
       const hdrRowPG = gRow;
       xlWriteHdrRow(wsG, gRow, ['Unit Type', ...months]); gRow++;
 
@@ -1956,7 +1964,7 @@ async function exportToExcel() {
         const sty = xlBodyStyle(fill);
         const rawVals = months.map(m => getWtdRentForMonth(prop, bt, m));
         const growthVals = pctGrowthSeries(rawVals);
-        xlWriteDataCell(wsG, gRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+        xlWriteDataCell(wsG, gRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Calibri', size: 10, bold: true } });
         months.forEach((m, mi) => {
           xlWriteDataCell(wsG, gRow, 2 + mi, growthVals[mi] != null ? Math.round(growthVals[mi] * 1000) / 1000 : '', sty, '0.0%');
         });
@@ -2000,7 +2008,7 @@ async function exportToExcel() {
       const propsWithData = comps.filter(c => { const fps = getFloorplansForType(c, bedType); return fps.length > 0 && months.some(m => getWtdPsfForMonth(c, bedType, m) !== null); });
       if (propsWithData.length === 0) return;
 
-      const titleC = ws3.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg $/SF by Month'; titleC.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; row++;
+      const titleC = ws3.getCell(row, 1); titleC.value = bedType + ' — Weighted Avg $/SF by Month'; titleC.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; row++;
 
       const hdrRow3 = row;
       xlWriteHdrRow(ws3, row, ['Property', ...months]); row++;
@@ -2042,7 +2050,7 @@ async function exportToExcel() {
   const ws4 = wb.addWorksheet('Unit Mix Comparison', { properties: { tabColor: { argb: '2E7D4F' } } });
   ws4.columns = [{ width: 30 }, { width: 12 }, ...BED_TYPES.map(() => ({ width: 12 }))];
 
-  const mixTitle = ws4.getCell('A1'); mixTitle.value = 'Unit Mix Comparison (% of Total Units)'; mixTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY };
+  const mixTitle = ws4.getCell('A1'); mixTitle.value = 'Unit Mix Comparison (% of Total Units)'; mixTitle.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY };
 
   xlWriteHdrRow(ws4, 3, ['Property', 'Total Units', ...BED_TYPES]);
 
@@ -2081,8 +2089,8 @@ async function exportToExcel() {
     const ws = wb.addWorksheet(sheetName, { properties: { tabColor: { argb: tabColor } } });
     ws.columns = [{ width: 30 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 13 }, { width: 13 }, { width: 16 }];
 
-    const title = ws.getCell('A1'); title.value = 'Rent & SF Comparison by Bedroom Type — Sorted by ' + chartLabel; title.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
-    const dateC = ws.getCell('A2'); dateC.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateC.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+    const title = ws.getCell('A1'); title.value = 'Rent & SF Comparison by Bedroom Type — Sorted by ' + chartLabel; title.font = { name: 'Times New Roman', size: 14, bold: true, color: XL_NAVY };
+    const dateC = ws.getCell('A2'); dateC.value = 'Generated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); dateC.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } };
 
     let r = 4;
     BED_TYPES.forEach(bedType => {
@@ -2095,7 +2103,7 @@ async function exportToExcel() {
         return (aggB[sortKey] || 0) - (aggA[sortKey] || 0);
       });
 
-      const sec = ws.getCell(r, 1); sec.value = bedType; sec.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; r++;
+      const sec = ws.getCell(r, 1); sec.value = bedType; sec.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; r++;
 
       xlWriteHdrRow(ws, r, ['Property', 'SF', 'Rent', '$/SF', 'Occupancy', 'Unit Count', '% of Total Units']); r++;
 
@@ -2167,11 +2175,11 @@ async function exportToExcel() {
       wsP.columns = pColWidths;
 
       let pRow = 1;
-      const pTitle = wsP.getCell(pRow, 1); pTitle.value = prop.name; pTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY }; pRow++;
-      const pAddr = wsP.getCell(pRow, 1); pAddr.value = (prop.address || '') + '  |  ' + (prop.totalUnits || 0) + ' units'; pAddr.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } }; pRow += 2;
+      const pTitle = wsP.getCell(pRow, 1); pTitle.value = prop.name; pTitle.font = { name: 'Times New Roman', size: 14, bold: true, color: XL_NAVY }; pRow++;
+      const pAddr = wsP.getCell(pRow, 1); pAddr.value = (prop.address || '') + '  |  ' + (prop.totalUnits || 0) + ' units'; pAddr.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } }; pRow += 2;
 
       // Rent section
-      const rentTitle = wsP.getCell(pRow, 1); rentTitle.value = 'Monthly Weighted Avg Rent'; rentTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; pRow++;
+      const rentTitle = wsP.getCell(pRow, 1); rentTitle.value = 'Monthly Weighted Avg Rent'; rentTitle.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; pRow++;
       const rentHdrRow = pRow;
       xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
 
@@ -2180,7 +2188,7 @@ async function exportToExcel() {
       propBedTypes.forEach((bt, bi) => {
         const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
         const sty = xlBodyStyle(fill);
-        xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+        xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Calibri', size: 10, bold: true } });
         months.forEach((m, mi) => {
           const v = getWtdRentForMonth(prop, bt, m);
           xlWriteDataCell(wsP, pRow, 2 + mi, v ? Math.round(v) : '', sty, '$#,##0');
@@ -2222,7 +2230,7 @@ async function exportToExcel() {
         return fps.length > 0 && months.some(m => getWtdPsfForMonth(prop, bt, m) !== null);
       });
       if (psfBedTypes.length > 0) {
-        const psfTitle = wsP.getCell(pRow, 1); psfTitle.value = 'Monthly Weighted Avg $/SF'; psfTitle.font = { name: 'Arial', size: 12, bold: true, color: XL_NAVY }; pRow++;
+        const psfTitle = wsP.getCell(pRow, 1); psfTitle.value = 'Monthly Weighted Avg $/SF'; psfTitle.font = { name: 'Times New Roman', size: 12, bold: true, color: XL_NAVY }; pRow++;
         const psfHdrRow = pRow;
         xlWriteHdrRow(wsP, pRow, ['Unit Type', ...months, '12-Mo Change ($)', '12-Mo Change (%)']); pRow++;
         const psfLastColL = _xlCol(1 + months.length);
@@ -2231,7 +2239,7 @@ async function exportToExcel() {
         psfBedTypes.forEach((bt, bi) => {
           const fill = bi % 2 === 0 ? XL_ALT_GRAY : null;
           const sty = xlBodyStyle(fill);
-          xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Arial', size: 10, bold: true } });
+          xlWriteDataCell(wsP, pRow, 1, bt, { ...sty, alignment: { horizontal: 'left' }, font: { name: 'Calibri', size: 10, bold: true } });
           months.forEach((m, mi) => {
             const v = getWtdPsfForMonth(prop, bt, m);
             xlWriteDataCell(wsP, pRow, 2 + mi, v ? Math.round(v * 100) / 100 : '', sty, '$#,##0.00');
@@ -2267,8 +2275,8 @@ async function exportToExcel() {
   // ── Bubble Analysis Tab ──
   const wsBub = wb.addWorksheet('Bubble Analysis', { properties: { tabColor: { argb: '48C4E4' } } });
   wsBub.columns = [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 14 }, { width: 16 }, { width: 12 }];
-  const bubTitle = wsBub.getCell('A1'); bubTitle.value = 'Rent vs Unit Size — Bubble Analysis'; bubTitle.font = { name: 'Arial', size: 14, bold: true, color: XL_NAVY };
-  const bubSub = wsBub.getCell('A2'); bubSub.value = 'Each row is one bedroom type per property (aggregated). Bubble size = number of units.'; bubSub.font = { name: 'Arial', size: 10, color: { argb: 'FF666666' } };
+  const bubTitle = wsBub.getCell('A1'); bubTitle.value = 'Rent vs Unit Size — Bubble Analysis'; bubTitle.font = { name: 'Times New Roman', size: 14, bold: true, color: XL_NAVY };
+  const bubSub = wsBub.getCell('A2'); bubSub.value = 'Each row is one bedroom type per property (aggregated). Bubble size = number of units.'; bubSub.font = { name: 'Calibri', size: 10, color: { argb: 'FF666666' } };
   xlWriteHdrRow(wsBub, 4, ['Series', 'Property', 'Bedroom Type', 'Avg SF', 'Avg Rent', 'Units']);
   let bubRow = 5, bubCompStart = 0, bubCompEnd = 0, bubSubjStart = 0, bubSubjEnd = 0;
   function _aggByType(prop) {

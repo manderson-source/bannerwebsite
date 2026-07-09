@@ -154,6 +154,27 @@
     .modal-box input:focus { outline: none; border-color: var(--steel); box-shadow: 0 0 0 2px rgba(74,111,165,0.1); }
     .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 
+    .guide-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%); color: white; border-radius: var(--radius); padding: 2rem 2.25rem; box-shadow: var(--shadow-lg); margin-bottom: 1.25rem; }
+    .guide-hero h2 { font-family: var(--serif); font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .guide-hero p { font-size: 0.92rem; line-height: 1.65; opacity: 0.9; max-width: 760px; }
+    .guide-steps { display: flex; flex-direction: column; gap: 0.9rem; }
+    .guide-step { display: flex; gap: 0.9rem; align-items: flex-start; }
+    .guide-step-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--steel); color: white; font-family: var(--serif); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; }
+    .guide-step-body h4 { font-family: var(--sans); font-size: 0.88rem; font-weight: 700; color: var(--navy); margin-bottom: 0.15rem; }
+    .guide-step-body p { font-size: 0.8rem; color: var(--text-mid); line-height: 1.5; }
+    .guide-tab-card { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.9rem; border: 1px solid var(--border-light); border-radius: 8px; background: var(--warm-gray); }
+    .guide-tab-card svg { flex-shrink: 0; width: 20px; height: 20px; color: var(--steel); margin-top: 0.1rem; }
+    .guide-tab-card h4 { font-family: var(--serif); font-size: 0.88rem; font-weight: 700; color: var(--navy); margin-bottom: 0.2rem; }
+    .guide-tab-card p { font-size: 0.78rem; color: var(--text-mid); line-height: 1.5; }
+    .guide-feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
+    .guide-feature { padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--border-light); background: var(--card); }
+    .guide-feature .guide-feature-title { display: flex; align-items: center; gap: 0.4rem; font-family: var(--sans); font-weight: 700; font-size: 0.8rem; color: var(--navy); margin-bottom: 0.25rem; }
+    .guide-feature .guide-feature-title svg { width: 15px; height: 15px; color: var(--steel); }
+    .guide-feature p { font-size: 0.76rem; color: var(--text-mid); line-height: 1.5; }
+    .guide-note { display: flex; gap: 0.65rem; align-items: flex-start; background: var(--sky-pale); border: 1px solid var(--border-light); border-left: 3px solid var(--steel); border-radius: 6px; padding: 0.85rem 1rem; }
+    .guide-note svg { flex-shrink: 0; width: 18px; height: 18px; color: var(--steel); margin-top: 0.05rem; }
+    .guide-note p { font-size: 0.8rem; color: var(--text-mid); line-height: 1.55; }
+
     .badge { display: inline-block; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
     .badge-subject { background: var(--steel); color: white; }
     .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
@@ -207,7 +228,11 @@
 
 <div class="container">
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('setup')">
+    <div class="tab active" onclick="switchTab('guide')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Guide
+    </div>
+    <div class="tab" onclick="switchTab('setup')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Setup
     </div>
@@ -229,8 +254,126 @@
     </div>
   </div>
 
+  <!-- GUIDE TAB -->
+  <div class="tab-content active" id="tab-guide">
+    <div class="guide-hero">
+      <h2>Welcome to the Rent Comp Dashboard</h2>
+      <p>This tool helps you underwrite a property by comparing it against real market comps sourced from Yardi and CoStar exports. Upload comp data, describe your subject property, and the dashboard builds weighted-average comparisons, rent and $/SF charts, rent growth trends, and a fully formatted, chart-ready Excel workbook &mdash; automatically.</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Quick Start
+        </div>
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-step-num">1</div>
+            <div class="guide-step-body">
+              <h4>Upload your comps</h4>
+              <p>Drag in Yardi Rental Rate History exports or CoStar Unit Mix exports on the Setup tab. Both formats are auto-detected &mdash; CoStar files will ask you to name the property since that file type doesn't include it.</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-num">2</div>
+            <div class="guide-step-body">
+              <h4>Describe your subject property</h4>
+              <p>Enter its name, address, market, year built, occupancy, and unit mix. Use <strong>Suggest Pricing</strong> to get a data-driven starting rent for each unit type, benchmarked against your top comps.</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-num">3</div>
+            <div class="guide-step-body">
+              <h4>Apply &amp; Compare</h4>
+              <p>Click "Apply &amp; Compare" to lock in your subject property and unlock the Dashboard, Tables, and Rent Growth tabs.</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-num">4</div>
+            <div class="guide-step-body">
+              <h4>Explore the analysis</h4>
+              <p>Review charts on the Dashboard, detailed side-by-side tables on Tables, and month-over-month rent growth (%) on Rent Growth.</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-num">5</div>
+            <div class="guide-step-body">
+              <h4>Save, share, or export</h4>
+              <p>Save the comparison for later, copy a share link so a colleague can view or save their own copy, or export everything &mdash; tables and native, interactive charts &mdash; to a formatted Excel workbook.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          What Each Tab Shows
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.65rem;">
+          <div class="guide-tab-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div><h4>Setup</h4><p>Upload comps, enter the subject property and unit mix, and apply the comparison.</p></div>
+          </div>
+          <div class="guide-tab-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <div><h4>Dashboard</h4><p>Rent, $/SF, unit mix, rent premium/discount, and bubble charts comparing every comp to your subject.</p></div>
+          </div>
+          <div class="guide-tab-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            <div><h4>Tables</h4><p>A sortable property summary and detailed side-by-side comparisons for every bedroom type, with diffs vs. your subject.</p></div>
+          </div>
+          <div class="guide-tab-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <div><h4>Rent Growth</h4><p>% rent growth over time, indexed to each comp's first tracked month &mdash; by bedroom type across comps, and by comp broken out by unit type.</p></div>
+          </div>
+          <div class="guide-tab-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <div><h4>Saved</h4><p>Revisit, sort, share, re-export, or delete comparisons you've saved from previous sessions.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-gap">
+      <div class="section-label" style="margin-bottom:0.75rem;">Key Features</div>
+      <div class="guide-feature-grid">
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="4"/></svg>Suggest Pricing</div>
+          <p>Recommends rents for the subject's unit mix, benchmarked to the top comp(s) per bedroom type, with a written rationale.</p>
+        </div>
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Yardi + CoStar Import</div>
+          <p>Drop in either export format &mdash; they're auto-detected and normalized into the same comparison model.</p>
+        </div>
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share Links</div>
+          <p>Copy a compressed link to a saved comparison, or export/import it as a JSON file &mdash; no account or server needed.</p>
+        </div>
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Alcove Grouping</div>
+          <p>Toggle whether Alcove units are folded into Studio or kept as their own bedroom-type category, everywhere in the app.</p>
+        </div>
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Native Excel Export</div>
+          <p>Every chart in the workbook is a real, interactive Excel chart linked to its data table &mdash; not a picture.</p>
+        </div>
+        <div class="guide-feature">
+          <div class="guide-feature-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>Saved Comparisons</div>
+          <p>Save as many subject/comp comparisons as you like, sorted by name or date, all stored locally in your browser.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-gap guide-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <p>All data stays in your browser &mdash; nothing is uploaded to a server. Saved comparisons persist on this device only, so use Share Link or Export to Excel to hand off work to someone else.</p>
+    </div>
+  </div>
+
   <!-- SETUP TAB -->
-  <div class="tab-content active" id="tab-setup">
+  <div class="tab-content" id="tab-setup">
     <div class="grid-2">
       <div>
         <div class="card">
@@ -556,7 +699,7 @@ function getAggregatedForType(prop, normType) {
 
 // ── Tab Switching ──
 function switchTab(tab) {
-  const tabNames = ['setup','dashboard','tables','rentgrowth','saved'];
+  const tabNames = ['guide','setup','dashboard','tables','rentgrowth','saved'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabNames[i] === tab));
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');

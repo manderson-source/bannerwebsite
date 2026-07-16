@@ -145,6 +145,20 @@
     .section-gap { margin-top: 1.25rem; }
     .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-light); }
     .empty-state svg { margin-bottom: 0.75rem; color: var(--border); }
+    .auth-gate { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%); }
+    .auth-gate.hidden { display: none; }
+    .auth-gate-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 2.25rem 2rem; width: 100%; max-width: 380px; text-align: center; }
+    .auth-gate-box .logo-mark { display: flex; justify-content: center; margin-bottom: 0.85rem; }
+    .auth-gate-box h2 { font-family: var(--serif); font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 0.3rem; }
+    .auth-gate-box p { font-size: 0.8rem; color: var(--text-light); margin-bottom: 1.25rem; }
+    .auth-gate-box input { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-family: var(--sans); font-size: 0.95rem; margin-bottom: 0.85rem; text-align: center; letter-spacing: 0.04em; }
+    .auth-gate-box input:focus { outline: none; border-color: var(--steel); box-shadow: 0 0 0 2px rgba(74,111,165,0.15); }
+    .auth-gate-box input.shake { animation: authShake 0.35s; border-color: var(--red); }
+    .auth-gate-box .auth-error { font-size: 0.76rem; color: var(--red); margin-bottom: 0.75rem; display: none; }
+    .auth-gate-box .auth-error.show { display: block; }
+    .auth-gate-box .btn-export { width: 100%; justify-content: center; padding: 0.6rem; }
+    @keyframes authShake { 0%,100%{transform:translateX(0);} 20%,60%{transform:translateX(-6px);} 40%,80%{transform:translateX(6px);} }
+
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(27,42,74,0.55); z-index: 300; align-items: center; justify-content: center; }
     .modal-overlay.show { display: flex; }
     .modal-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 1.5rem; width: 100%; max-width: 420px; }
@@ -199,6 +213,29 @@
   </style>
 </head>
 <body>
+
+<div class="auth-gate hidden" id="authGate">
+  <div class="auth-gate-box">
+    <div class="logo-mark">
+      <svg width="36" height="40" viewBox="0 0 36 40" fill="none">
+        <polygon points="0,0 36,0 20,20" fill="#48C4E4"/>
+        <polygon points="0,0 20,20 36,40 0,40" fill="#1E90B5"/>
+      </svg>
+    </div>
+    <h2>Banner Real Estate Group</h2>
+    <p>Enter the password to access the Rent Comp Dashboard.</p>
+    <input type="password" id="authGatePassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')submitAuthGate()">
+    <div class="auth-error" id="authGateError">Incorrect password. Try again.</div>
+    <button class="btn btn-export" onclick="submitAuthGate()">Enter</button>
+  </div>
+</div>
+<script>
+  // Runs immediately (before the rest of the page renders) to avoid a flash of visible content
+  // for anyone who hasn't already unlocked the site in this browser.
+  if (localStorage.getItem('bannerAuthOk') !== 'true') {
+    document.getElementById('authGate').classList.remove('hidden');
+  }
+</script>
 
 <header>
   <div class="logo">
@@ -608,6 +645,25 @@
 </div>
 
 <script>
+// ── Password gate ──
+// Client-side only — anyone who views the page source can read SITE_PASSWORD, so this
+// keeps out casual/uninvited visitors rather than providing real access control.
+const SITE_PASSWORD = 'BannerDevRA';
+function submitAuthGate() {
+  const input = document.getElementById('authGatePassword');
+  const errorEl = document.getElementById('authGateError');
+  if (input.value === SITE_PASSWORD) {
+    localStorage.setItem('bannerAuthOk', 'true');
+    document.getElementById('authGate').classList.add('hidden');
+    errorEl.classList.remove('show');
+  } else {
+    errorEl.classList.add('show');
+    input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+    input.value = '';
+    input.focus();
+  }
+}
+
 // ── Muted color palette ──
 const SUBJECT_COLOR = '#1A56DB';
 const COMP_COLORS = ['#a8706a','#6a9a7a','#b8a66a','#8a7a9a','#6a9a96','#a8856a','#9a7a7a','#7a9a7a','#b89a6a','#8a8a8a'];

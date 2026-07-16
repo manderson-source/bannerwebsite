@@ -2501,32 +2501,100 @@ async function exportToExcel() {
 // ── Saved Comparisons ──
 const STORAGE_KEY = 'rentCompSaved';
 
+// ── Google Drive sync (shared team storage, survives cleared local data) ──
+const DRIVE_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwiC6j3WL8CtGZiSPQwhTy1sk5t_Qw3990iSRt4PIbhfiUJLncJWjJRxZRwvBYyBFUf/exec';
+const DRIVE_SYNC_TOKEN = '2398uvg89t3hvn9ghhnug439hbvmkll-68n3';
+
+async function saveComparisonToDrive(comparison) {
+  try {
+    const res = await fetch(DRIVE_SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight Apps Script can't handle
+      body: JSON.stringify({ token: DRIVE_SYNC_TOKEN, comparison }) // keep `id` intact — the script uses it as the filename
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return true;
+  } catch (err) {
+    notify('Saved locally, but Drive sync failed: ' + err.message, 'error');
+    return false;
+  }
+}
+
+async function loadComparisonsFromDrive() {
+  try {
+    const res = await fetch(DRIVE_SYNC_URL + '?action=list&token=' + encodeURIComponent(DRIVE_SYNC_TOKEN));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.comparisons || [];
+  } catch (err) {
+    console.error('Drive load failed:', err);
+    return null; // signals "unreachable" so the caller can fall back to local-only
+  }
+}
+
+async function deleteComparisonFromDrive(id) {
+  try {
+    const res = await fetch(DRIVE_SYNC_URL + '?action=delete&id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(DRIVE_SYNC_TOKEN));
+    const data = await res.json();
+    return !data.error;
+  } catch (err) {
+    console.error('Drive delete failed:', err);
+    return false;
+  }
+}
+
 function getSavedComparisons() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
 }
 
-function saveComparison() {
+// The list actually shown/operated on — a merge of local + Drive, refreshed each time
+// renderSavedList() runs. Load/Delete/Share/Export-JSON all look up from this so they
+// work on Drive-sourced comparisons too, not just ones present in this browser's storage.
+let mergedSavedList = [];
+
+async function saveComparison() {
   const nameInput = document.getElementById('saveCompName');
   let name = nameInput.value.trim();
   if (!subjectProperty || properties.length === 0) { notify('Load comps and apply a subject first', 'error'); return; }
   if (!name) name = subjectProperty.name + ' vs ' + properties.length + ' comp' + (properties.length !== 1 ? 's' : '');
 
-  const saved = getSavedComparisons();
-  saved.unshift({
+  const entry = {
     id: 'save_' + Date.now(),
     name: name,
     date: new Date().toISOString(),
     subject: JSON.parse(JSON.stringify(subjectProperty)),
     comps: JSON.parse(JSON.stringify(properties))
-  });
+  };
+
+  const saved = getSavedComparisons();
+  saved.unshift(entry);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   nameInput.value = '';
   notify('Comparison saved: ' + name, 'success');
   renderSavedList();
+
+  const synced = await saveComparisonToDrive(entry);
+  if (synced) notify('Synced to shared Drive', 'success');
 }
 
-function renderSavedList() {
-  const saved = getSavedComparisons();
+async function renderSavedList() {
+  const local = getSavedComparisons();
+  renderSavedCards(local); // instant local render while Drive loads in the background
+
+  const driveList = await loadComparisonsFromDrive();
+  if (driveList === null) { mergedSavedList = local; return; } // Drive unreachable — local view stands
+
+  // Merge by id: Drive's copy wins if the same comparison exists in both places.
+  const byId = new Map();
+  local.forEach(s => byId.set(s.id, s));
+  driveList.forEach(s => byId.set(s.id, s));
+  const merged = [...byId.values()];
+  renderSavedCards(merged);
+}
+
+function renderSavedCards(saved) {
+  mergedSavedList = saved;
   const container = document.getElementById('savedList');
   const empty = document.getElementById('savedEmpty');
   const countEl = document.getElementById('savedCount');
@@ -2582,8 +2650,7 @@ function renderSavedList() {
 }
 
 function loadComparison(id) {
-  const saved = getSavedComparisons();
-  const s = saved.find(x => x.id === id);
+  const s = mergedSavedList.find(x => x.id === id);
   if (!s) { notify('Comparison not found', 'error'); return; }
 
   properties = s.comps;
@@ -2618,8 +2685,7 @@ function loadComparison(id) {
 }
 
 async function exportSavedToExcel(id) {
-  const saved = getSavedComparisons();
-  const s = saved.find(x => x.id === id);
+  const s = mergedSavedList.find(x => x.id === id);
   if (!s) return;
   const origSubj = subjectProperty, origProps = properties;
   subjectProperty = s.subject;
@@ -2629,11 +2695,12 @@ async function exportSavedToExcel(id) {
   properties = origProps;
 }
 
-function deleteComparison(id) {
+async function deleteComparison(id) {
   const saved = getSavedComparisons().filter(x => x.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   notify('Comparison deleted', 'success');
   renderSavedList();
+  await deleteComparisonFromDrive(id); // no-op locally if it was never synced
 }
 
 // ── Sharing ──
@@ -2643,8 +2710,7 @@ function _stripForShare(s) {
 }
 
 function shareComparison(id) {
-  const saved = getSavedComparisons();
-  const s = saved.find(x => x.id === id);
+  const s = mergedSavedList.find(x => x.id === id);
   if (!s) return;
   try {
     const json = JSON.stringify(_stripForShare(s));
@@ -2658,8 +2724,7 @@ function shareComparison(id) {
 }
 
 function exportComparisonJson(id) {
-  const saved = getSavedComparisons();
-  const s = saved.find(x => x.id === id);
+  const s = mergedSavedList.find(x => x.id === id);
   if (!s) return;
   const json = JSON.stringify(_stripForShare(s), null, 2);
   const blob = new Blob([json], { type: 'application/json' });

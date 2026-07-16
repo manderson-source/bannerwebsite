@@ -1307,7 +1307,7 @@ function renderCharts() {
 
   charts.unitMix = new Chart(document.getElementById('chartUnitMix'), {
     type: 'bar', data: { labels: labels, datasets: normTypes.map((nt,ni) => ({ label: nt, data: all.map(p => { const a = getAggregatedForType(p,nt); return a ? (a.units / (p.totalUnits||1) * 100) : 0; }), backgroundColor: UNIT_TYPE_COLORS[ni%UNIT_TYPE_COLORS.length]+'88', borderColor: UNIT_TYPE_COLORS[ni%UNIT_TYPE_COLORS.length], borderWidth: 1 })) },
-    options: { ...defaultOpts, scales: { x: { stacked: true, ticks: { font: { ...chartFont, size: 10 } } }, y: { stacked: true, max: 100, ticks: { callback: v=>v+'%', font: chartFont } } } }
+    options: { ...defaultOpts, plugins: { ...defaultOpts.plugins, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y) + '%' } } }, scales: { x: { stacked: true, ticks: { font: { ...chartFont, size: 10 } } }, y: { stacked: true, max: 100, ticks: { callback: v=>v+'%', font: chartFont } } } }
   });
 
   // Bubble chart: one bubble per bedroom type per property (aggregated)

@@ -1149,6 +1149,7 @@ function updateSubjectTotals() {
 const UNITMIX_SF_BUCKET = 25;   // round SF to the nearest N for clustering near-duplicate sizes
 const UNITMIX_MIN_UNITS = 5;    // a size/type needs at least this many pooled units to count
 const UNITMIX_MIN_SHARE = 0.05; // ...and at least this share of its group's total units
+const UNITMIX_MIN_COMP_PRESENCE = 0.5; // ...OR appears in at least this share of comps — a type most comps carry is real, even at a small %
 
 function suggestUnitMix() {
   if (properties.length === 0) { notify('Load comp properties first', 'error'); return; }
@@ -1186,18 +1187,15 @@ function suggestUnitMix() {
   const typeTotalUnits = {};
   Object.keys(byType).forEach(nt => { typeTotalUnits[nt] = byType[nt].reduce((s, b) => s + b.units, 0); });
 
-  // 3. Statistical significance is still judged on pooled (unit-weighted) totals — that's about
-  // whether there's enough real data to trust a type, not about how much weight each comp gets.
+  // 3. A bedroom type is "significant" (kept in the suggestion) if EITHER:
+  //    - it clears the old pooled absolute bar (enough raw units, enough share of the pool), OR
+  //    - most of the comps carry it at all, even if each only carries a small share. A type that
+  //      shows up across most comps is a real, recurring part of the market — not a one-off —
+  //      even if it's a small slice of any single comp.
+  // A true one-off (e.g. a single 3 BR unit in one comp out of five) fails both and gets dropped.
   const grandTotal = pooled.reduce((s, f) => s + f.units, 0);
   const allTypes = Object.keys(typeTotalUnits);
-  let significantTypes = allTypes.filter(nt => typeTotalUnits[nt] >= UNITMIX_MIN_UNITS && (typeTotalUnits[nt] / grandTotal) >= UNITMIX_MIN_SHARE);
-  if (significantTypes.length === 0) significantTypes = allTypes; // fallback if nothing clears the bar
 
-  const bedroomOrder = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'];
-  significantTypes.sort((a, b) => { const ia = bedroomOrder.indexOf(a), ib = bedroomOrder.indexOf(b); return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib); });
-
-  // The final mix % is the AVERAGE of each comp's own mix %, so every comp counts equally
-  // regardless of size (a 300-unit comp doesn't outweigh a 40-unit comp).
   const compBreakdowns = properties.map(p => {
     const t = {}; let total = 0;
     p.unitTypes.forEach(u => {
@@ -1210,6 +1208,20 @@ function suggestUnitMix() {
     return { t, total };
   }).filter(c => c.total > 0);
 
+  const compPresenceByType = {};
+  allTypes.forEach(nt => { compPresenceByType[nt] = compBreakdowns.filter(c => (c.t[nt] || 0) > 0).length / compBreakdowns.length; });
+
+  let significantTypes = allTypes.filter(nt =>
+    (typeTotalUnits[nt] >= UNITMIX_MIN_UNITS && (typeTotalUnits[nt] / grandTotal) >= UNITMIX_MIN_SHARE) ||
+    compPresenceByType[nt] >= UNITMIX_MIN_COMP_PRESENCE
+  );
+  if (significantTypes.length === 0) significantTypes = allTypes; // fallback if nothing clears the bar
+
+  const bedroomOrder = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'];
+  significantTypes.sort((a, b) => { const ia = bedroomOrder.indexOf(a), ib = bedroomOrder.indexOf(b); return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib); });
+
+  // The final mix % is the AVERAGE of each comp's own mix %, so every comp counts equally
+  // regardless of size (a 300-unit comp doesn't outweigh a 40-unit comp).
   const avgPctByType = {};
   allTypes.forEach(nt => {
     const pcts = compBreakdowns.map(c => (c.t[nt] || 0) / c.total);

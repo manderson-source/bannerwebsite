@@ -477,7 +477,11 @@
           <div style="margin-top:1.15rem;">
             <div class="flex-between">
               <label style="font-family:var(--serif); font-size:0.85rem; font-weight:700; color:var(--navy);">Unit Mix</label>
-              <div style="display:flex; gap:0.4rem;">
+              <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                <button class="btn btn-secondary" onclick="suggestUnitMix()" style="font-size:0.75rem; padding:0.3rem 0.65rem;" title="Suggest a unit mix (SF and % of total units per type) based on loaded comps">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
+                  Suggest Unit Mix
+                </button>
                 <button class="btn btn-secondary" onclick="suggestPricing()" style="font-size:0.75rem; padding:0.3rem 0.65rem;" title="Suggest rents based on loaded comps">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="4"/></svg>
                   Suggest Pricing
@@ -495,6 +499,14 @@
               </tr></thead>
               <tbody id="subjectMixBody"></tbody>
             </table>
+            <div id="unitMixRationale" style="display:none; margin-top:0.75rem; padding:0.75rem 0.9rem; background:var(--sky-pale); border:1px solid var(--steel); border-radius:6px;">
+              <div style="font-family:var(--serif); font-weight:700; font-size:0.8rem; color:var(--navy); margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
+                Suggested Unit Mix Rationale
+              </div>
+              <ul id="unitMixRationaleList" style="margin:0 0 0.4rem 1.1rem; font-size:0.78rem; color:var(--text-mid); line-height:1.5;"></ul>
+              <div style="font-size:0.7rem; color:var(--text-light); font-style:italic;">Data-driven estimate from your loaded comps' floorplans — not a substitute for market judgment. Review before applying. Rents were left blank; run Suggest Pricing next to fill them in.</div>
+            </div>
             <div id="pricingRationale" style="display:none; margin-top:0.75rem; padding:0.75rem 0.9rem; background:var(--sky-pale); border:1px solid var(--steel); border-radius:6px;">
               <div style="font-family:var(--serif); font-weight:700; font-size:0.8rem; color:var(--navy); margin-bottom:0.35rem; display:flex; align-items:center; gap:0.4rem;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="4"/></svg>
@@ -1045,6 +1057,7 @@ function clearAll() {
   document.getElementById('subjectOccupancy').value = '';
   document.getElementById('subjectMixBody').innerHTML = '';
   document.getElementById('pricingRationale').style.display = 'none';
+  document.getElementById('unitMixRationale').style.display = 'none';
   initSubjectRows(); renderPropertyCards();
   document.getElementById('exportBtn').disabled = true;
   document.getElementById('dashboardContent').style.display = 'none';
@@ -1127,6 +1140,122 @@ function updateSubjectTotals() {
     const units = parseFloat(tr.querySelectorAll('input')[1].value) || 0;
     tr.querySelectorAll('.calc-cell')[1].textContent = totalUnits > 0 ? (units / totalUnits * 100).toFixed(1) + '%' : '—';
   });
+}
+
+// Pools every floorplan from every loaded comp, groups by bedroom type, buckets by SF within
+// each type, filters out statistically insignificant sizes/types, then recommends a bedroom-type
+// mix % (from the comps' blended unit supply) and a best-performing SF per type (by pooled,
+// unit-weighted $/SF — a fair comparison within a bedroom type, unlike across bedroom types).
+const UNITMIX_SF_BUCKET = 25;   // round SF to the nearest N for clustering near-duplicate sizes
+const UNITMIX_MIN_UNITS = 5;    // a size/type needs at least this many pooled units to count
+const UNITMIX_MIN_SHARE = 0.05; // ...and at least this share of its group's total units
+
+function suggestUnitMix() {
+  if (properties.length === 0) { notify('Load comp properties first', 'error'); return; }
+
+  const currentTotal = parseFloat(document.getElementById('subjectTotalUnits').value) || '';
+  const totalInput = prompt('How many total units should the subject property have?', currentTotal || '');
+  if (totalInput === null) return; // cancelled
+  const targetTotal = parseInt(totalInput, 10);
+  if (!targetTotal || targetTotal <= 0) { notify('Enter a valid total unit count', 'error'); return; }
+
+  // 1. Pool every floorplan from every comp
+  const pooled = [];
+  properties.forEach(p => {
+    p.unitTypes.forEach(u => {
+      if (u.units > 0 && u.sqft > 0 && u.marketRent > 0) {
+        pooled.push({ nt: normalizeUnitType(u.unitType), sqft: u.sqft, units: u.units, psf: u.rentPerSqft || (u.marketRent / u.sqft) });
+      }
+    });
+  });
+  if (pooled.length === 0) { notify('No usable floorplan data found in loaded comps', 'error'); return; }
+
+  // 2. Bucket by (bedroom type, rounded SF), weighting by units
+  const buckets = {};
+  pooled.forEach(f => {
+    const sfBucket = Math.round(f.sqft / UNITMIX_SF_BUCKET) * UNITMIX_SF_BUCKET;
+    const key = f.nt + '|' + sfBucket;
+    if (!buckets[key]) buckets[key] = { nt: f.nt, units: 0, sfSum: 0, psfSum: 0 };
+    buckets[key].units += f.units;
+    buckets[key].sfSum += f.sqft * f.units;
+    buckets[key].psfSum += f.psf * f.units;
+  });
+  const bucketList = Object.values(buckets).map(b => ({ nt: b.nt, units: b.units, avgSF: Math.round(b.sfSum / b.units), avgPsf: b.psfSum / b.units }));
+
+  const byType = {};
+  bucketList.forEach(b => { (byType[b.nt] = byType[b.nt] || []).push(b); });
+  const typeTotalUnits = {};
+  Object.keys(byType).forEach(nt => { typeTotalUnits[nt] = byType[nt].reduce((s, b) => s + b.units, 0); });
+
+  // 3. Bedroom-type mix % from ALL pooled units (unfiltered by size), with its own significance
+  // filter — decided BEFORE picking sizes, so a type dropped here never gets a size recommendation.
+  const grandTotal = pooled.reduce((s, f) => s + f.units, 0);
+  const allTypes = Object.keys(typeTotalUnits);
+  let significantTypes = allTypes.filter(nt => typeTotalUnits[nt] >= UNITMIX_MIN_UNITS && (typeTotalUnits[nt] / grandTotal) >= UNITMIX_MIN_SHARE);
+  if (significantTypes.length === 0) significantTypes = allTypes; // fallback if nothing clears the bar
+
+  const bedroomOrder = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'];
+  significantTypes.sort((a, b) => { const ia = bedroomOrder.indexOf(a), ib = bedroomOrder.indexOf(b); return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib); });
+
+  const sigGrandTotal = significantTypes.reduce((s, nt) => s + typeTotalUnits[nt], 0);
+  const mixPct = {};
+  significantTypes.forEach(nt => { mixPct[nt] = typeTotalUnits[nt] / sigGrandTotal; });
+  const excludedTypes = allTypes.filter(nt => !significantTypes.includes(nt));
+
+  // 4. Within each SURVIVING bedroom type, pick the best-performing SF that clears the significance bar
+  const chosenSizePerType = {};
+  const sizeRationale = [];
+  significantTypes.forEach(nt => {
+    const all = byType[nt].slice().sort((a, b) => b.avgPsf - a.avgPsf);
+    const total = typeTotalUnits[nt];
+    let significant = all.filter(b => b.units >= UNITMIX_MIN_UNITS && (b.units / total) >= UNITMIX_MIN_SHARE);
+    let usedFallback = false;
+    if (significant.length === 0) { significant = [all[0]]; usedFallback = true; }
+    const winner = significant[0];
+    chosenSizePerType[nt] = winner;
+    const runnersUp = significant.slice(1);
+    const excludedSizes = all.filter(b => !significant.includes(b));
+    let line = nt + ': recommended ' + winner.avgSF + ' SF (avg $' + winner.avgPsf.toFixed(2) + '/SF across ' + winner.units + ' units)';
+    if (usedFallback) line += ' — limited data, using the best available size.';
+    if (runnersUp.length) line += ', ahead of the also-significant ' + runnersUp.map(b => b.avgSF + ' SF ($' + b.avgPsf.toFixed(2) + '/SF, ' + b.units + ' units)').join(', ') + '.';
+    else line += '.';
+    if (excludedSizes.length) line += ' Excluded as insignificant: ' + excludedSizes.map(b => b.avgSF + ' SF (' + b.units + ' units)').join(', ') + '.';
+    sizeRationale.push(line);
+  });
+
+  // 5. Distribute the target total across types (largest-remainder method so it sums exactly)
+  const rawCounts = significantTypes.map(nt => { const raw = targetTotal * mixPct[nt]; return { nt, floor: Math.floor(raw), rem: raw - Math.floor(raw) }; });
+  let allocated = rawCounts.reduce((s, r) => s + r.floor, 0);
+  let remaining = targetTotal - allocated;
+  const byRemainder = rawCounts.slice().sort((a, b) => b.rem - a.rem);
+  for (let i = 0; i < remaining; i++) byRemainder[i % byRemainder.length].floor += 1;
+  const finalCounts = {};
+  rawCounts.forEach(r => { finalCounts[r.nt] = r.floor; });
+
+  // 6. Rebuild the subject's unit mix table with the recommendation (rents left blank)
+  const body = document.getElementById('subjectMixBody');
+  body.innerHTML = '';
+  significantTypes.forEach(nt => {
+    const count = finalCounts[nt];
+    if (count <= 0) return;
+    addSubjectRow(nt);
+    const tr = body.lastElementChild;
+    const inputs = tr.querySelectorAll('input');
+    inputs[1].value = count;
+    inputs[2].value = chosenSizePerType[nt].avgSF;
+    calcSubjectRow(inputs[2]);
+  });
+  updateSubjectTotals();
+
+  // 7. Rationale
+  const lines = ['Bedroom-type mix is based on the blended share of units across your ' + properties.length + ' loaded comp' + (properties.length !== 1 ? 's' : '') + '.'];
+  lines.push(...sizeRationale);
+  if (excludedTypes.length) lines.push('Excluded bedroom types (insignificant sample): ' + excludedTypes.join(', ') + '.');
+  document.getElementById('unitMixRationaleList').innerHTML = lines.map(l => '<li>' + esc(l) + '</li>').join('');
+  document.getElementById('unitMixRationale').style.display = 'block';
+  document.getElementById('pricingRationale').style.display = 'none'; // stale — rows just changed
+
+  notify('Suggested unit mix applied — ' + significantTypes.length + ' unit type' + (significantTypes.length !== 1 ? 's' : '') + ', ' + targetTotal + ' total units', 'success');
 }
 
 function suggestPricing() {
@@ -2722,6 +2851,7 @@ function loadComparison(id) {
   const body = document.getElementById('subjectMixBody');
   body.innerHTML = '';
   document.getElementById('pricingRationale').style.display = 'none';
+  document.getElementById('unitMixRationale').style.display = 'none';
   s.subject.unitTypes.forEach(u => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>
@@ -2826,6 +2956,7 @@ function _loadSharedData(data, prefix) {
   const body = document.getElementById('subjectMixBody');
   body.innerHTML = '';
   document.getElementById('pricingRationale').style.display = 'none';
+  document.getElementById('unitMixRationale').style.display = 'none';
   (data.subject.unitTypes || []).forEach(u => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="text" value="${esc(u.unitType)}" onkeydown="mixKeyNav(event)"></td>

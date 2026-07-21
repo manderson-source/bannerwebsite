@@ -1233,24 +1233,42 @@ function suggestUnitMix() {
   significantTypes.forEach(nt => { mixPct[nt] = avgPctByType[nt] / sigPctSum; });
   const excludedTypes = allTypes.filter(nt => !significantTypes.includes(nt));
 
-  // 4. Within each SURVIVING bedroom type, pick the best-performing SF that clears the significance bar
+  // 4. Within each SURVIVING bedroom type, pick the best-performing SF that (a) clears the
+  // significance bar and (b) stays within +/-5% of that type's own unit-weighted average SF —
+  // otherwise a small, high-$/SF outlier (the "small-unit premium") can win purely because it's
+  // small, dragging the suggested size well below what the type actually averages.
   const chosenSizePerType = {};
   const sizeRationale = [];
   significantTypes.forEach(nt => {
-    const all = byType[nt].slice().sort((a, b) => b.avgPsf - a.avgPsf);
     const total = typeTotalUnits[nt];
+    const avgSF = byType[nt].reduce((s, b) => s + b.avgSF * b.units, 0) / total;
+    const lo = avgSF * 0.95, hi = avgSF * 1.05;
+
+    const all = byType[nt].slice().sort((a, b) => b.avgPsf - a.avgPsf);
     let significant = all.filter(b => b.units >= UNITMIX_MIN_UNITS && (b.units / total) >= UNITMIX_MIN_SHARE);
     let usedFallback = false;
     if (significant.length === 0) { significant = [all[0]]; usedFallback = true; }
-    const winner = significant[0];
+
+    let inRange = significant.filter(b => b.avgSF >= lo && b.avgSF <= hi);
+    let usedRangeFallback = false;
+    if (inRange.length === 0) {
+      // Nothing significant falls within 5% of the average — use whichever significant size is closest to it.
+      inRange = [significant.slice().sort((a, b) => Math.abs(a.avgSF - avgSF) - Math.abs(b.avgSF - avgSF))[0]];
+      usedRangeFallback = true;
+    }
+    const winner = inRange[0];
     chosenSizePerType[nt] = winner;
-    const runnersUp = significant.slice(1);
-    const excludedSizes = all.filter(b => !significant.includes(b));
-    let line = nt + ': recommended ' + winner.avgSF + ' SF (avg $' + winner.avgPsf.toFixed(2) + '/SF across ' + winner.units + ' units)';
-    if (usedFallback) line += ' — limited data, using the best available size.';
-    if (runnersUp.length) line += ', ahead of the also-significant ' + runnersUp.map(b => b.avgSF + ' SF ($' + b.avgPsf.toFixed(2) + '/SF, ' + b.units + ' units)').join(', ') + '.';
-    else line += '.';
-    if (excludedSizes.length) line += ' Excluded as insignificant: ' + excludedSizes.map(b => b.avgSF + ' SF (' + b.units + ' units)').join(', ') + '.';
+    const runnersUp = inRange.slice(1);
+    const excludedForRange = significant.filter(b => !inRange.includes(b));
+    const excludedForSignificance = all.filter(b => !significant.includes(b));
+
+    let line = nt + ': recommended ' + winner.avgSF + ' SF (avg $' + winner.avgPsf.toFixed(2) + '/SF across ' + winner.units + ' units) — within 5% of the type\'s ' + Math.round(avgSF) + ' SF average';
+    if (usedFallback) line += ', limited data, using the best available size';
+    if (usedRangeFallback) line += ', no significant size fell within 5% of the average so the closest one was used';
+    line += '.';
+    if (runnersUp.length) line += ' Also within range: ' + runnersUp.map(b => b.avgSF + ' SF ($' + b.avgPsf.toFixed(2) + '/SF, ' + b.units + ' units)').join(', ') + '.';
+    if (excludedForRange.length) line += ' Excluded for deviating more than 5% from the average: ' + excludedForRange.map(b => b.avgSF + ' SF ($' + b.avgPsf.toFixed(2) + '/SF, ' + b.units + ' units)').join(', ') + '.';
+    if (excludedForSignificance.length) line += ' Excluded as insignificant: ' + excludedForSignificance.map(b => b.avgSF + ' SF (' + b.units + ' units)').join(', ') + '.';
     sizeRationale.push(line);
   });
 

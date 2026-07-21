@@ -1153,11 +1153,10 @@ const UNITMIX_MIN_SHARE = 0.05; // ...and at least this share of its group's tot
 function suggestUnitMix() {
   if (properties.length === 0) { notify('Load comp properties first', 'error'); return; }
 
-  const currentTotal = parseFloat(document.getElementById('subjectTotalUnits').value) || '';
-  const totalInput = prompt('How many total units should the subject property have?', currentTotal || '');
-  if (totalInput === null) return; // cancelled
-  const targetTotal = parseInt(totalInput, 10);
-  if (!targetTotal || targetTotal <= 0) { notify('Enter a valid total unit count', 'error'); return; }
+  // 0. Target total units = average of the comps' own total unit counts (no manual entry)
+  const totalUnitsVals = properties.map(p => p.totalUnits).filter(n => n > 0);
+  if (totalUnitsVals.length === 0) { notify('Loaded comps are missing total unit counts', 'error'); return; }
+  const targetTotal = Math.round(totalUnitsVals.reduce((a, b) => a + b, 0) / totalUnitsVals.length);
 
   // 1. Pool every floorplan from every comp
   const pooled = [];
@@ -1187,8 +1186,8 @@ function suggestUnitMix() {
   const typeTotalUnits = {};
   Object.keys(byType).forEach(nt => { typeTotalUnits[nt] = byType[nt].reduce((s, b) => s + b.units, 0); });
 
-  // 3. Bedroom-type mix % from ALL pooled units (unfiltered by size), with its own significance
-  // filter — decided BEFORE picking sizes, so a type dropped here never gets a size recommendation.
+  // 3. Statistical significance is still judged on pooled (unit-weighted) totals — that's about
+  // whether there's enough real data to trust a type, not about how much weight each comp gets.
   const grandTotal = pooled.reduce((s, f) => s + f.units, 0);
   const allTypes = Object.keys(typeTotalUnits);
   let significantTypes = allTypes.filter(nt => typeTotalUnits[nt] >= UNITMIX_MIN_UNITS && (typeTotalUnits[nt] / grandTotal) >= UNITMIX_MIN_SHARE);
@@ -1197,9 +1196,29 @@ function suggestUnitMix() {
   const bedroomOrder = ['Studio', '1 BR Alcove', '1 BR', '2 BR Alcove', '2 BR', '3 BR', '4 BR', '5 BR'];
   significantTypes.sort((a, b) => { const ia = bedroomOrder.indexOf(a), ib = bedroomOrder.indexOf(b); return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib); });
 
-  const sigGrandTotal = significantTypes.reduce((s, nt) => s + typeTotalUnits[nt], 0);
+  // The final mix % is the AVERAGE of each comp's own mix %, so every comp counts equally
+  // regardless of size (a 300-unit comp doesn't outweigh a 40-unit comp).
+  const compBreakdowns = properties.map(p => {
+    const t = {}; let total = 0;
+    p.unitTypes.forEach(u => {
+      if (u.units > 0 && u.sqft > 0 && u.marketRent > 0) {
+        const nt = normalizeUnitType(u.unitType);
+        t[nt] = (t[nt] || 0) + u.units;
+        total += u.units;
+      }
+    });
+    return { t, total };
+  }).filter(c => c.total > 0);
+
+  const avgPctByType = {};
+  allTypes.forEach(nt => {
+    const pcts = compBreakdowns.map(c => (c.t[nt] || 0) / c.total);
+    avgPctByType[nt] = pcts.reduce((s, v) => s + v, 0) / pcts.length;
+  });
+
+  const sigPctSum = significantTypes.reduce((s, nt) => s + avgPctByType[nt], 0);
   const mixPct = {};
-  significantTypes.forEach(nt => { mixPct[nt] = typeTotalUnits[nt] / sigGrandTotal; });
+  significantTypes.forEach(nt => { mixPct[nt] = avgPctByType[nt] / sigPctSum; });
   const excludedTypes = allTypes.filter(nt => !significantTypes.includes(nt));
 
   // 4. Within each SURVIVING bedroom type, pick the best-performing SF that clears the significance bar
@@ -1248,7 +1267,10 @@ function suggestUnitMix() {
   updateSubjectTotals();
 
   // 7. Rationale
-  const lines = ['Bedroom-type mix is based on the blended share of units across your ' + properties.length + ' loaded comp' + (properties.length !== 1 ? 's' : '') + '.'];
+  const lines = [
+    'Target of ' + targetTotal + ' total units is the average total unit count across your ' + totalUnitsVals.length + ' loaded comp' + (totalUnitsVals.length !== 1 ? 's' : '') + '.',
+    'Bedroom-type mix % is the average of each comp\'s own mix (every comp weighted equally, regardless of size).'
+  ];
   lines.push(...sizeRationale);
   if (excludedTypes.length) lines.push('Excluded bedroom types (insignificant sample): ' + excludedTypes.join(', ') + '.');
   document.getElementById('unitMixRationaleList').innerHTML = lines.map(l => '<li>' + esc(l) + '</li>').join('');

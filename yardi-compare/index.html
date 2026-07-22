@@ -806,13 +806,35 @@ function mapPinIcon(color) {
   });
 }
 
-async function geocodeAddress(address) {
-  const key = address.trim().toLowerCase();
-  if (key in mapGeocodeCache) return mapGeocodeCache[key];
+// Census Bureau's geocoder (routed through the Apps Script backend, since it doesn't support
+// direct browser fetches) is street-number-accurate for US addresses — far better than OSM
+// coverage for most apartment buildings. Falls back to Nominatim (OpenStreetMap) for addresses
+// it can't match (e.g. non-US) or if the Apps Script doesn't have the 'geocode' action yet.
+async function geocodeViaCensusProxy(address) {
+  try {
+    const res = await fetch(DRIVE_SYNC_URL + '?action=geocode&address=' + encodeURIComponent(address) + '&token=' + encodeURIComponent(DRIVE_SYNC_TOKEN));
+    const data = await res.json();
+    return (data && data.lat != null && data.lon != null) ? { lat: data.lat, lon: data.lon } : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function geocodeViaNominatim(address) {
   const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
   const res = await fetch(url);
   const data = await res.json();
-  const result = (data && data[0]) ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+  return (data && data[0]) ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+}
+
+async function geocodeAddress(address) {
+  const key = address.trim().toLowerCase();
+  if (key in mapGeocodeCache) return mapGeocodeCache[key];
+  let result = await geocodeViaCensusProxy(address);
+  if (!result) {
+    result = await geocodeViaNominatim(address);
+    await new Promise(r => setTimeout(r, 1100)); // Nominatim's usage policy: max 1 request/sec — only needed when we actually fall back to it
+  }
   mapGeocodeCache[key] = result;
   return result;
 }
@@ -867,7 +889,6 @@ async function plotCompsOnMap() {
     } else {
       failed.push(p.name);
     }
-    if (i < withAddr.length - 1) await new Promise(r => setTimeout(r, 1100)); // Nominatim usage policy: max 1 request/sec
   }
 
   if (bounds.length > 0) { map.invalidateSize(); map.fitBounds(bounds, { padding: [30, 30] }); }

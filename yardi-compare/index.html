@@ -10,6 +10,8 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --navy: #1b2a4a;
@@ -280,6 +282,10 @@
     <div class="tab" onclick="switchTab('tables')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       Tables
+    </div>
+    <div class="tab" onclick="switchTab('map')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      Map
     </div>
     <div class="tab" onclick="switchTab('rentgrowth')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -582,6 +588,26 @@
     </div>
   </div>
 
+  <!-- MAP TAB -->
+  <div class="tab-content" id="tab-map">
+    <div id="mapEmpty" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      <p>Upload Yardi/CoStar comps (and enter a subject property) to plot them on a map.</p>
+    </div>
+    <div id="mapContent" style="display:none;">
+      <div class="flex-between" style="margin-bottom:0.5rem;">
+        <span class="section-label">Comp Map</span>
+        <button class="btn btn-secondary" id="mapPlotBtn" onclick="plotCompsOnMap()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+          Plot on Map
+        </button>
+      </div>
+      <p class="help-note" style="margin-bottom:0.75rem;">Geocodes each property's address via OpenStreetMap and drops a pin — navy for the subject, steel blue for comps.</p>
+      <div id="compMap" style="height:560px; border-radius:8px; border:1px solid var(--border);"></div>
+      <div id="mapStatus" class="help-note" style="margin-top:0.5rem;"></div>
+    </div>
+  </div>
+
   <!-- RENT GROWTH TAB -->
   <div class="tab-content" id="tab-rentgrowth">
     <div id="rentGrowthEmpty" class="empty-state">
@@ -765,14 +791,102 @@ function getAggregatedForType(prop, normType) {
   return { units: totalUnits, sqft: Math.round(wtdSF), marketRent: Math.round(wtdRent), rentPerSqft: wtdSF > 0 ? wtdRent / wtdSF : null };
 }
 
+// ── Comp Map ──
+let compMapInstance = null;
+let compMapMarkers = null;
+const mapGeocodeCache = {};
+
+function mapPinIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="background:' + color + '; width:16px; height:16px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:2px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 16],
+    popupAnchor: [0, -16]
+  });
+}
+
+async function geocodeAddress(address) {
+  const key = address.trim().toLowerCase();
+  if (key in mapGeocodeCache) return mapGeocodeCache[key];
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
+  const res = await fetch(url);
+  const data = await res.json();
+  const result = (data && data[0]) ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+  mapGeocodeCache[key] = result;
+  return result;
+}
+
+function ensureCompMap() {
+  if (compMapInstance) return compMapInstance;
+  compMapInstance = L.map('compMap').setView([39.8283, -98.5795], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(compMapInstance);
+  return compMapInstance;
+}
+
+function renderMapTab() {
+  const hasData = properties.length > 0 || subjectProperty;
+  document.getElementById('mapEmpty').style.display = hasData ? 'none' : '';
+  document.getElementById('mapContent').style.display = hasData ? '' : 'none';
+  if (hasData) {
+    const map = ensureCompMap();
+    setTimeout(() => map.invalidateSize(), 0); // container was display:none — Leaflet needs a size recheck once visible
+  }
+}
+
+async function plotCompsOnMap() {
+  const all = subjectProperty ? [subjectProperty, ...properties] : properties.slice();
+  const withAddr = all.filter(p => p.address && p.address.trim());
+  if (withAddr.length === 0) { notify('No property addresses found to plot', 'error'); return; }
+
+  const btn = document.getElementById('mapPlotBtn');
+  const status = document.getElementById('mapStatus');
+  btn.disabled = true;
+
+  const map = ensureCompMap();
+  map.invalidateSize();
+  if (compMapMarkers) map.removeLayer(compMapMarkers);
+  compMapMarkers = L.layerGroup().addTo(map);
+
+  const bounds = [];
+  const failed = [];
+  for (let i = 0; i < withAddr.length; i++) {
+    const p = withAddr[i];
+    status.textContent = 'Geocoding ' + (i + 1) + ' of ' + withAddr.length + ' — ' + p.name + '...';
+    let geo = null;
+    try { geo = await geocodeAddress(p.address); } catch (e) { geo = null; }
+    if (geo) {
+      const isSubject = p.id === 'subject';
+      const marker = L.marker([geo.lat, geo.lon], { icon: mapPinIcon(isSubject ? '#1b2a4a' : '#4a6fa5') });
+      marker.bindPopup('<strong>' + esc(p.name) + '</strong>' + (isSubject ? ' (Subject)' : '') + '<br>' + esc(p.address) + (p.totalUnits ? '<br>' + p.totalUnits + ' units' : ''));
+      marker.addTo(compMapMarkers);
+      bounds.push([geo.lat, geo.lon]);
+    } else {
+      failed.push(p.name);
+    }
+    if (i < withAddr.length - 1) await new Promise(r => setTimeout(r, 1100)); // Nominatim usage policy: max 1 request/sec
+  }
+
+  if (bounds.length > 0) { map.invalidateSize(); map.fitBounds(bounds, { padding: [30, 30] }); }
+  btn.disabled = false;
+  status.textContent = failed.length
+    ? 'Plotted ' + bounds.length + ' of ' + withAddr.length + '. Could not locate: ' + failed.join(', ') + '.'
+    : 'Plotted ' + bounds.length + ' propert' + (bounds.length !== 1 ? 'ies' : 'y') + '.';
+  notify('Mapped ' + bounds.length + ' propert' + (bounds.length !== 1 ? 'ies' : 'y'), bounds.length > 0 ? 'success' : 'error');
+}
+
 // ── Tab Switching ──
 function switchTab(tab) {
-  const tabNames = ['guide','setup','dashboard','tables','rentgrowth','saved'];
+  const tabNames = ['guide','setup','dashboard','tables','map','rentgrowth','saved'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabNames[i] === tab));
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'dashboard') renderDashboard();
   if (tab === 'tables') renderTables();
+  if (tab === 'map') renderMapTab();
   if (tab === 'rentgrowth') renderRentGrowth();
   if (tab === 'saved') renderSavedList();
 }

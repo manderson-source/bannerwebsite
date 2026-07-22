@@ -1241,7 +1241,10 @@ function suggestUnitMix() {
   const sizeRationale = [];
   significantTypes.forEach(nt => {
     const total = typeTotalUnits[nt];
-    const avgSF = byType[nt].reduce((s, b) => s + b.avgSF * b.units, 0) / total;
+    // Match the "COMP AVERAGE" figure shown on the Tables tab: average of each comp's own
+    // unit-weighted avg SF for this type (equal weight per comp), not a pooled/bucketed average.
+    const perCompAggs = properties.map(p => getAggregatedForType(p, nt)).filter(a => a !== null);
+    const avgSF = perCompAggs.length ? perCompAggs.reduce((s, a) => s + a.sqft, 0) / perCompAggs.length : (byType[nt].reduce((s, b) => s + b.avgSF * b.units, 0) / total);
     const lo = avgSF * 0.95, hi = avgSF * 1.05;
 
     const all = byType[nt].slice().sort((a, b) => b.avgPsf - a.avgPsf);
